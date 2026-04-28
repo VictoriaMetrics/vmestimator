@@ -134,6 +134,12 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	}
 }
 
+func (e *estimator) reset() {
+	for _, b := range e.buckets {
+		b.reset()
+	}
+}
+
 func (e *estimator) writeMetrics(w io.Writer) {
 	formatBuf := make([]byte, 0, 1024)
 	eb0 := e.buckets[0]
@@ -200,6 +206,23 @@ func (eb *estimatorBucket) String() string {
 // Stop stops the background rotation goroutine, if any.
 func (eb *estimatorBucket) stop() {
 	close(eb.stopCh)
+}
+
+func (eb *estimatorBucket) reset() {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	if len(eb.groupBy) == 0 {
+		eb.sketch.Reset()
+		return
+	}
+
+	for k := range eb.groups {
+		delete(eb.groups, k)
+	}
+	for k := range eb.prevGroups {
+		delete(eb.prevGroups, k)
+	}
 }
 
 // runRotation resets the sketches on every tick until stopCh is closed.
