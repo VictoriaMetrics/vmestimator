@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"net/http"
 	"sync"
 	"time"
@@ -24,7 +25,7 @@ var (
 	cardinalityCacheMu  sync.Mutex
 	cardinalityCacheAt  time.Time
 	cardinalityCache    []byte
-	cardinalityCacheTTL = time.Minute
+	cardinalityCacheTTL = flag.Duration("cardinalityCacheTTL", time.Minute, "Duration for caching cardinality metrics response")
 )
 
 func requestHandler(estimators []*estimator) httpserver.RequestHandler {
@@ -68,7 +69,7 @@ func handleCardinalityMetrics(w http.ResponseWriter, _ *http.Request, estimators
 	startTime := time.Now()
 
 	cardinalityCacheMu.Lock()
-	if time.Since(cardinalityCacheAt) >= cardinalityCacheTTL {
+	if time.Since(cardinalityCacheAt) >= *cardinalityCacheTTL {
 		plain := bytes.NewBuffer(cardinalityCache[:0])
 		for _, e := range estimators {
 			e.writeMetrics(plain)
