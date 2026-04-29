@@ -49,9 +49,19 @@ func requestHandler(estimators []*estimator) httpserver.RequestHandler {
 		case "/cardinality/metrics":
 			handleCardinalityMetrics(w, r, estimators)
 			return true
+		case "/cardinality/reset":
+			handleCardinalityReset(w, r, estimators)
+			return true
 		}
 		return false
 	}
+}
+
+func handleCardinalityReset(w http.ResponseWriter, _ *http.Request, estimators []*estimator) {
+	for _, e := range estimators {
+		e.reset()
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func handleCardinalityMetrics(w http.ResponseWriter, _ *http.Request, estimators []*estimator) {
