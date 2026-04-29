@@ -1,11 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"io"
+	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
@@ -16,11 +15,15 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/procutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/pushmetrics"
 	"github.com/VictoriaMetrics/metrics"
+	"github.com/makasim/cestimator/app/cestorage/protoparser"
 )
 
 var (
 	httpListenAddrs = flagutil.NewArrayString("httpListenAddr", "TCP address to listen for incoming HTTP requests")
 	configPath      = flag.String("config", "config.yaml", "Path to YAML configuration file")
+
+	prometheusWriteRequests = metrics.NewCounter(`cestorage_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
+	rowsInserted            = metrics.NewCounter(`cestorage_rows_inserted_total{type="promremotewrite"}`)
 )
 
 func main() {
@@ -49,6 +52,18 @@ func main() {
 		})
 	}
 
+	groupLabelsMap := make(map[string]struct{})
+	for _, e := range estimators {
+		for _, l := range e.groupBy {
+			groupLabelsMap[l] = struct{}{}
+		}
+	}
+
+	groupLabels := make([]string, 0, len(groupLabelsMap))
+	for k := range groupLabelsMap {
+		groupLabels = append(groupLabels, k)
+	}
+
 	listenAddrs := *httpListenAddrs
 	if len(listenAddrs) == 0 {
 		listenAddrs = []string{":8490"}
@@ -57,7 +72,43 @@ func main() {
 	logger.Infof("starting cestorage at %q", listenAddrs)
 	startTime := time.Now()
 
-	go httpserver.Serve(listenAddrs, requestHandler(estimators), httpserver.ServeOptions{})
+	go httpserver.Serve(listenAddrs, func(w http.ResponseWriter, r *http.Request) bool {
+		cmPath := *cardinalityMetricsExposeAt
+
+		if cmPath != "/metrics" && cmPath != "" && r.URL.Path == cmPath {
+			w.WriteHeader(http.StatusOK)
+			writeCardinalityMetrics(w, estimators)
+			return true
+		}
+
+		switch r.URL.Path {
+		case "/api/v1/write":
+			prometheusWriteRequests.Inc()
+			err := protoparser.Parse(r.Body, groupLabels, func(tss []protoparser.TimeSerie) {
+				//var wg sync.WaitGroup
+				for _, e := range estimators {
+					//wg.Go(func() {
+					e.insertMany(tss)
+					//})
+				}
+				//wg.Wait()
+				rowsInserted.Add(len(tss))
+			})
+			if err != nil {
+				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)
+				return true
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return true
+		case "/cardinality/reset":
+			for _, e := range estimators {
+				e.reset()
+			}
+			w.WriteHeader(http.StatusOK)
+			return true
+		}
+		return false
+	}, httpserver.ServeOptions{})
 
 	logger.Infof("started cestorage in %.3f seconds", time.Since(startTime).Seconds())
 
@@ -74,41 +125,4 @@ func main() {
 		e.stop()
 	}
 	logger.Infof("shutting down cestorage")
-}
-
-var (
-	cardinalityMetricsWrites        = metrics.NewCounter(`cestorage_write_cardinality_metrics_total`)
-	cardinalityMetricsWriteDuration = metrics.NewFloatCounter(`cestorage_write_cardinality_metrics_duration_seconds_total`)
-	cardinalityMetricsWriteBytes    = metrics.NewCounter(`cestorage_write_cardinality_metrics_size_bytes_total`)
-
-	cardinalityCacheMu         sync.Mutex
-	cardinalityMetricsCacheAt  time.Time
-	cardinalityMetricsCache    []byte
-	cardinalityMetricsCacheTTL = flag.Duration("cardinalityMetrics.cacheTTL", time.Minute, "Duration for caching cardinality metrics response")
-	cardinalityMetricsExposeAt = flag.String(`cardinalityMetrics.exposeAt`, `/metrics`, "HTTP path for exposing cardinality metrics. "+
-		"If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. "+
-		"If set to a different path, only cardinality metrics are exposed at that endpoint. "+
-		"If set to an empty value, cardinality metrics are not exposed via HTTP at all.")
-)
-
-func writeCardinalityMetrics(w io.Writer, es []*estimator) {
-	startTime := time.Now()
-
-	cardinalityCacheMu.Lock()
-	if time.Since(cardinalityMetricsCacheAt) >= *cardinalityMetricsCacheTTL || *cardinalityMetricsCacheTTL == 0 {
-		plain := bytes.NewBuffer(cardinalityMetricsCache[:0])
-		for _, e := range es {
-			e.writeMetrics(plain)
-		}
-		cardinalityMetricsCache = plain.Bytes()
-		cardinalityMetricsCacheAt = time.Now()
-	}
-	cm := cardinalityMetricsCache
-	cardinalityCacheMu.Unlock()
-
-	_, _ = w.Write(cm)
-
-	cardinalityMetricsWrites.Inc()
-	cardinalityMetricsWriteDuration.Add(time.Since(startTime).Seconds())
-	cardinalityMetricsWriteBytes.Add(len(cm))
 }
