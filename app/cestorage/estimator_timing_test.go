@@ -9,8 +9,8 @@ import (
 	"github.com/makasim/cestimator/app/cestorage/protoparser"
 )
 
-func BenchmarkWriteMetrics_NoGroup(b *testing.B) {
-	b.Run("NoPrev", func(b *testing.B) {
+func BenchmarkEstimator_WriteMetrics(b *testing.B) {
+	b.Run("NoGroup/NoPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
@@ -25,7 +25,7 @@ func BenchmarkWriteMetrics_NoGroup(b *testing.B) {
 		}
 	})
 
-	b.Run("WithPrev", func(b *testing.B) {
+	b.Run("NoGroup/WithPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
@@ -43,12 +43,10 @@ func BenchmarkWriteMetrics_NoGroup(b *testing.B) {
 			e.writeMetrics(io.Discard)
 		}
 	})
-}
 
-func BenchmarkWriteMetrics_Group100(b *testing.B) {
-	b.Run("NoPrev", func(b *testing.B) {
+	b.Run("Group100/NoPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			Group:    []string{"groupLabel"},
+			GroupBy:  []string{"groupLabel"},
 			Interval: time.Hour,
 		})
 		if err != nil {
@@ -64,9 +62,9 @@ func BenchmarkWriteMetrics_Group100(b *testing.B) {
 		}
 	})
 
-	b.Run("WithPrev", func(b *testing.B) {
+	b.Run("Group100/WithPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			Group:    []string{"groupLabel"},
+			GroupBy:  []string{"groupLabel"},
 			Interval: time.Hour,
 		})
 		if err != nil {
@@ -85,12 +83,10 @@ func BenchmarkWriteMetrics_Group100(b *testing.B) {
 			e.writeMetrics(io.Discard)
 		}
 	})
-}
 
-func BenchmarkWriteMetrics_Group10k(b *testing.B) {
-	b.Run("NoPrev", func(b *testing.B) {
+	b.Run("Group10k/NoPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			Group:    []string{"groupLabel"},
+			GroupBy:  []string{"groupLabel"},
 			Interval: time.Hour,
 		})
 		if err != nil {
@@ -106,9 +102,9 @@ func BenchmarkWriteMetrics_Group10k(b *testing.B) {
 		}
 	})
 
-	b.Run("WithPrev", func(b *testing.B) {
+	b.Run("Group10k/WithPrev", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			Group:    []string{"groupLabel"},
+			GroupBy:  []string{"groupLabel"},
 			Interval: time.Hour,
 		})
 		if err != nil {
@@ -126,6 +122,98 @@ func BenchmarkWriteMetrics_Group10k(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			e.writeMetrics(io.Discard)
 		}
+	})
+}
+
+func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
+	b.Run("NoGroup", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			var i uint64
+			for pb.Next() {
+				e.insertMany([]protoparser.TimeSerie{{Fingerprint: i}})
+				i++
+			}
+		})
+	})
+
+	b.Run("Group100", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{
+			GroupBy:  []string{"groupLabel"},
+			Interval: time.Hour,
+		})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			var i uint64
+			for pb.Next() {
+				e.insertMany([]protoparser.TimeSerie{{
+					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100)}},
+					Fingerprint: i,
+				}})
+				i++
+			}
+		})
+	})
+
+	b.Run("Group10k", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{
+			GroupBy:  []string{"groupLabel"},
+			Interval: time.Hour,
+		})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			var i uint64
+			for pb.Next() {
+				e.insertMany([]protoparser.TimeSerie{{
+					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%10_000)}},
+					Fingerprint: i,
+				}})
+				i++
+			}
+		})
+	})
+
+	b.Run("Group100k", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{
+			GroupBy:  []string{"groupLabel"},
+			Interval: time.Hour,
+		})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		b.RunParallel(func(pb *testing.PB) {
+			var i uint64
+			for pb.Next() {
+				e.insertMany([]protoparser.TimeSerie{{
+					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100_000)}},
+					Fingerprint: i,
+				}})
+				i++
+			}
+		})
 	})
 }
 

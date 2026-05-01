@@ -42,7 +42,7 @@ func BenchmarkParse_EstimatorGlobal(b *testing.B) {
 func BenchmarkParse_EstimatorGroup(b *testing.B) {
 	data := buildSnappyEncodedWriteRequest(5_000, 3, 5, 100)
 	e, err := newEstimator(EstimatorConfig{
-		Group:    []string{"groupLabel"},
+		GroupBy:  []string{"groupLabel"},
 		Interval: time.Hour,
 	})
 	if err != nil {

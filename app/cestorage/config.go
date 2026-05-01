@@ -9,16 +9,16 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config represents the cestorage configuration.
 type Config struct {
 	Streams []EstimatorConfig `yaml:"streams"`
 }
 
-// EstimatorConfig represents a single cardinality estimator configuration.
 type EstimatorConfig struct {
-	Group    []string          `yaml:"group"`    // optional: label names to split cardinality by
-	Labels   map[string]string `yaml:"labels"`   // optional: extra labels added to output metrics
-	Interval time.Duration     `yaml:"interval"` // optional: how often to rotate (reset) counters; 0 means no rotation
+	GroupBy    []string          `yaml:"group_by"`
+	GroupLimit int               `yaml:"group_limit"`
+	Labels     map[string]string `yaml:"labels"`
+	Interval   time.Duration     `yaml:"interval"`
+	Buckets    int               `yaml:"buckets"`
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -31,7 +31,7 @@ func loadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
 	}
 	for _, stream := range cfg.Streams {
-		sort.Strings(stream.Group)
+		sort.Strings(stream.GroupBy)
 	}
 
 	return &cfg, nil

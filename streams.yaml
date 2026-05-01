@@ -4,17 +4,17 @@ streams:
 
   # Track cardinality grouped by metric name.
   - interval: '1h'
-    group: ["__name__"]
+    group_by: ["__name__"]
 
   # Track cardinality grouped by job label.
   - interval: '1m'
-    group: ["job"]
+    group_by: ["job"]
 
   # Track cardinality grouped by tenant info
-  - group: ["vm_account_id", "vm_project_id"]
+  - group_by: ["vm_account_id", "vm_project_id"]
 
   # Track cardinality of tens jobs, with extra labels on the output metrics.
-  - group: ["job"]
+  - group_by: ["job"]
     labels:
       region: 'eu-central-1'
       env: 'production'
