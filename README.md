@@ -96,3 +96,36 @@ When grouping is enabled, cestorage exposes per-bucket operational metrics at `/
 There are Grafana dashboards available in `dashboards` directory:
 
 <img width="1512" height="862" alt="Screenshot 2026-04-23 at 09 47 38" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
+
+
+## Benchmarks
+
+```
+$ go test ./... -run=none -bench=.
+?       github.com/makasim/cestimator/app/cegen [no test files]
+goos: darwin
+goarch: arm64
+pkg: github.com/makasim/cestimator/app/cestorage
+cpu: Apple M1 Pro
+BenchmarkEstimator_WriteMetrics/NoGroup/NoPrev-10                 937376              1265 ns/op            1504 B/op         12 allocs/op
+BenchmarkEstimator_WriteMetrics/NoGroup/WithPrev-10               625159              1843 ns/op            1504 B/op         12 allocs/op
+BenchmarkEstimator_WriteMetrics/Group100/NoPrev-10                 56973             21076 ns/op            3745 B/op         81 allocs/op
+BenchmarkEstimator_WriteMetrics/Group100/WithPrev-10               43438             27834 ns/op            3745 B/op         81 allocs/op
+BenchmarkEstimator_WriteMetrics/Group10k/NoPrev-10                   807           1530942 ns/op            3106 B/op         71 allocs/op
+BenchmarkEstimator_WriteMetrics/Group10k/WithPrev-10                 580           2060489 ns/op            3107 B/op         71 allocs/op
+BenchmarkEstimator_InsertManyParallel/NoGroup-10                15398458                78.11 ns/op            0 B/op          0 allocs/op
+BenchmarkEstimator_InsertManyParallel/Group100-10               14786208                82.26 ns/op           15 B/op          1 allocs/op
+BenchmarkEstimator_InsertManyParallel/Group10k-10               13931193                84.10 ns/op           24 B/op          2 allocs/op
+BenchmarkEstimator_InsertManyParallel/Group100k-10               7087110               174.6 ns/op            24 B/op          3 allocs/op
+BenchmarkParse_EstimatorGlobal-10                                   2656            476446 ns/op           18224 B/op         26 allocs/op
+BenchmarkParse_EstimatorGroup-10                                    4430            259190 ns/op             129 B/op          6 allocs/op
+PASS
+ok      github.com/makasim/cestimator/app/cestorage     17.104s
+goos: darwin
+goarch: arm64
+pkg: github.com/makasim/cestimator/app/cestorage/protoparser
+cpu: Apple M1 Pro
+BenchmarkStreamParse-10               96          12052191 ns/op         162.92 MB/s      225972 B/op          6 allocs/op
+PASS
+ok      github.com/makasim/cestimator/app/cestorage/protoparser 1.482s
+```
