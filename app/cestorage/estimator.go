@@ -45,6 +45,12 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	if cfg.Buckets <= 0 {
 		cfg.Buckets = min(20, cgroup.AvailableCPUs())
 	}
+	if cfg.HLLPrecision == 0 {
+		cfg.HLLPrecision = 14
+	}
+	if cfg.HLLSparse == nil {
+		cfg.HLLSparse = new(true)
+	}
 
 	metricPrefix := fmt.Sprintf("cardinality_estimate{interval=%q", cfg.Interval)
 	if len(cfg.Labels) > 0 {
@@ -93,8 +99,8 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 			groupRejectedMu:     &e.groupRejectedMu,
 			groupRejectedSketch: e.groupRejectedSketch,
 
-			precision: 14,
-			sparse:    true,
+			precision: cfg.HLLPrecision,
+			sparse:    *cfg.HLLSparse,
 		}
 
 		if len(cfg.GroupBy) == 0 {

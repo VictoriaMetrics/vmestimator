@@ -47,6 +47,8 @@ Fields:
 - `buckets` (optional): number of internal shards for parallel ingestion; defaults to `min(20, availableCPUs)`
 - `labels` (optional): extra labels attached to all output metrics for this estimator
 - `interval` (optional): how often to rotate (reset) counters; defaults to `5m`
+- `hll_precision` (optional): HyperLogLog precision, must be in range `[4, 18]`; higher values yield more accurate estimates at the cost of more memory; defaults to `14`
+- `hll_sparse` (optional): whether to use sparse HyperLogLog representation, which reduces memory for low-cardinality groups; defaults to `true`
 
 Cardinality generator:
 
