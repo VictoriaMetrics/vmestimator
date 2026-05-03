@@ -6,13 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/snappy"
-
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/prompb"
+	"github.com/golang/snappy"
 )
 
 func BenchmarkParse(b *testing.B) {
-	data := buildSnappyEncodedWriteRequest(20_000, 20, 20, 3)
+	data := buildSnappyEncodedWriteRequest(5000, 20, 20, 3)
 	groupLabels := []string{
 		"foo",
 		"bar",
