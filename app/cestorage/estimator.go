@@ -23,9 +23,11 @@ type estimator struct {
 	groupBy          []string
 	groupByKeysLabel string
 
-	groupSize           atomic.Int64
-	groupRejectedMu     sync.Mutex
-	groupRejectedSketch *hyperloglog.Sketch
+	groupLimit              int64
+	groupSize               atomic.Int64
+	groupRejectedMu         sync.Mutex
+	groupRejectedSketch     *hyperloglog.Sketch
+	groupRejectedSketchPrev *hyperloglog.Sketch
 
 	buckets []*estimatorBucket
 
@@ -70,12 +72,14 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e := &estimator{
-		groupBy:             cfg.GroupBy,
-		groupByKeysLabel:    groupByKeysLabel,
-		groupRejectedSketch: mustNewGroupRejectSketch(),
-		buckets:             make([]*estimatorBucket, cfg.Buckets),
-		metricsSet:          metrics.NewSet(),
-		stopCh:              make(chan struct{}),
+		groupBy:                 cfg.GroupBy,
+		groupByKeysLabel:        groupByKeysLabel,
+		groupLimit:              int64(cfg.GroupLimit),
+		groupRejectedSketch:     mustNewGroupRejectSketch(),
+		groupRejectedSketchPrev: mustNewGroupRejectSketch(),
+		buckets:                 make([]*estimatorBucket, cfg.Buckets),
+		metricsSet:              metrics.NewSet(),
+		stopCh:                  make(chan struct{}),
 	}
 
 	e.insertTotal = e.metricsSet.NewCounter(
@@ -226,12 +230,23 @@ func (e *estimator) writeMetrics(w io.Writer) {
 		b.writeGroupMetrics(w, formatBuf, eb0.groupByKeysLabel)
 	}
 
+	groupSize := e.groupSize.Load()
+	if groupSize >= int64(float64(e.groupLimit)*0.8) {
+		e.groupRejectedMu.Lock()
+		res := mustNewGroupRejectSketch()
+		e.groupRejectedSketch.Merge(res)
+		e.groupRejectedSketchPrev.Merge(res)
+		e.groupRejectedMu.Unlock()
+
+		groupSize += int64(res.Estimate())
+	}
+
 	formatBuf = formatBuf[:0]
 	formatBuf = append(formatBuf, eb0.metricPrefix...)
 	formatBuf = append(formatBuf, `,group_by_keys="__group__",group_by_values="`...)
 	formatBuf = append(formatBuf, eb0.groupByKeysLabel...)
 	formatBuf = append(formatBuf, `"} `...)
-	formatBuf = strconv.AppendInt(formatBuf, e.groupSize.Load(), 10)
+	formatBuf = strconv.AppendInt(formatBuf, groupSize, 10)
 	formatBuf = append(formatBuf, "\n"...)
 	w.Write(formatBuf)
 }
@@ -259,7 +274,10 @@ func (e *estimator) rotate() {
 	wg.Wait()
 
 	e.groupRejectedMu.Lock()
-	e.groupRejectedSketch.Reset()
+	prevSK := e.groupRejectedSketchPrev
+	prevSK.Reset()
+	e.groupRejectedSketchPrev = e.groupRejectedSketch
+	e.groupRejectedSketch = prevSK
 	e.groupRejectedMu.Unlock()
 }
 
