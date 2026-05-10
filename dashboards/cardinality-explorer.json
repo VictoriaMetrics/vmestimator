@@ -125,7 +125,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",group_by_keys=~\"__global__\"}) by (interval)",
+          "expr": "max(max_over_time(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",group_by_keys=~\"__global__\"}[1m])) by (interval)",
           "legendFormat": "{{interval}}",
           "range": true,
           "refId": "A"
@@ -341,127 +341,26 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "topk(10, max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}) without (job,instance))",
+          "expr": "topk(10, max(max_over_time(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}[1m])) without (job,instance))",
           "legendFormat": "{{group_by_values}} ({{interval}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "$group_by_keys top 10",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 15,
-        "w": 24,
-        "x": 0,
-        "y": 27
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "bottomk(10, max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}) without (job,instance))",
-          "legendFormat": "{{group_by_values}} ({{interval}})",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "$group_by_keys bottom 10",
+      "title": " Top 10 Cardinality of $group_by_keys",
       "type": "timeseries"
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "10s",
   "schemaVersion": 42,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
-          "text": "sandbox-monitoring",
-          "value": "PB894574A363DF0AF"
+          "text": "prometheus",
+          "value": "P1809F7CD0C75ACF3"
         },
         "name": "ds",
         "options": [],
@@ -474,9 +373,11 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": "All",
+          "text": [
+            "cardinality-explorer"
+          ],
           "value": [
-            "$__all"
+            "cardinality-explorer"
           ]
         },
         "datasource": {
@@ -502,9 +403,11 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": "All",
+          "text": [
+            "192.168.50.102:8490"
+          ],
           "value": [
-            "$__all"
+            "192.168.50.102:8490"
           ]
         },
         "datasource": {
@@ -611,13 +514,13 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "Cardinality Explorer",
   "uid": "mktd5h8",
-  "version": 28,
+  "version": 14,
   "weekStart": ""
 }
