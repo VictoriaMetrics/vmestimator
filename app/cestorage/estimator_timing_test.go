@@ -217,6 +217,42 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 	})
 }
 
+// BenchmarkEstimator_InsertRotateCycle benchmarks the insert→rotate→insert cycle
+// for the global (no-group) estimator in two HLL regimes:
+//   - Sparse: 1 000 series per interval (sketch stays in sparse mode)
+//   - Normal: 30 000 series per interval (sketch converts to dense mode)
+func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
+	b.Run("SparseHLL", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			insertSeriesIntoEstimator(e, 1_000, 0)
+			e.rotate()
+		}
+	})
+
+	b.Run("NormalHLL", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			insertSeriesIntoEstimator(e, 30_000, 0)
+			e.rotate()
+		}
+	})
+}
+
 // insertSeriesIntoEstimator inserts numSeries time series into e.
 // When groupsNum > 0 each series gets a "groupLabel" cycling through groupsNum values.
 func insertSeriesIntoEstimator(e *estimator, numSeries, groupsNum int) {
