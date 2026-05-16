@@ -323,16 +323,13 @@ func (eb *estimatorBucket) reset() {
 	defer eb.mu.Unlock()
 
 	if len(eb.groupBy) == 0 {
+		eb.prevSketch.Reset()
 		eb.sketch.Reset()
 		return
 	}
 
-	for k := range eb.groups {
-		delete(eb.groups, k)
-	}
-	for k := range eb.prevGroups {
-		delete(eb.prevGroups, k)
-	}
+	eb.groups = make(map[string]groupSketch)
+	eb.prevGroups = make(map[string]groupSketch)
 }
 
 func (eb *estimatorBucket) rotate() {
