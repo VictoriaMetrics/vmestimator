@@ -1,6 +1,6 @@
-# cestorage
+# cestimator
 
-`cestorage` is a cardinality estimator that receives Prometheus remote write streams
+`cestimator` is a cardinality estimator that receives Prometheus remote write streams
 and exposes approximate time series cardinality as metrics (TODO: support remote write).
 
 It is useful for tracking how many unique time series are flowing through across all metrics, metric name, or broken down by specific labels.
@@ -13,7 +13,7 @@ The goal of this project is to evaluate whether cardinality estimation can provi
 
 Running:
 ```
-go run ./app/cestorage/... -config=streams.yaml -httpListenAddr=:8490
+go run ./app/cestimator/... -config=streams.yaml -httpListenAddr=:8490
 ```
 
 Configuration:
@@ -87,11 +87,11 @@ cardinality_estimate{interval="5m0s",env="production",region="eu-central-1",grou
 
 ## Operational metrics
 
-When grouping is enabled, cestorage exposes per-bucket operational metrics at `/metrics`:
+When grouping is enabled, cestimator exposes per-bucket operational metrics at `/metrics`:
 
-- `cestorage_group_estimator_size{groupBy, bucket}` — number of active groups in this bucket after the last rotation
-- `cestorage_group_estimator_rejected_size{groupBy, bucket}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
-- `cestorage_group_limit{groupBy, bucket}` — configured `group_limit` for this bucket
+- `cestimator_group_estimator_size{groupBy, bucket}` — number of active groups in this bucket after the last rotation
+- `cestimator_group_estimator_rejected_size{groupBy, bucket}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
+- `cestimator_group_limit{groupBy, bucket}` — configured `group_limit` for this bucket
 
 ## Dashboard
 
@@ -107,7 +107,7 @@ $ go test ./... -run=none -bench=.
 ?       github.com/makasim/cestimator/app/cegen [no test files]
 goos: darwin
 goarch: arm64
-pkg: github.com/makasim/cestimator/app/cestorage
+pkg: github.com/makasim/cestimator/app/cestimator
 cpu: Apple M1 Pro
 BenchmarkEstimator_WriteMetrics/NoGroup/NoPrev-10                 937376              1265 ns/op            1504 B/op         12 allocs/op
 BenchmarkEstimator_WriteMetrics/NoGroup/WithPrev-10               625159              1843 ns/op            1504 B/op         12 allocs/op
@@ -122,12 +122,12 @@ BenchmarkEstimator_InsertManyParallel/Group100k-10               7087110        
 BenchmarkParse_EstimatorGlobal-10                                   2656            476446 ns/op           18224 B/op         26 allocs/op
 BenchmarkParse_EstimatorGroup-10                                    4430            259190 ns/op             129 B/op          6 allocs/op
 PASS
-ok      github.com/makasim/cestimator/app/cestorage     17.104s
+ok      github.com/makasim/cestimator/app/cestimator     17.104s
 goos: darwin
 goarch: arm64
-pkg: github.com/makasim/cestimator/app/cestorage/protoparser
+pkg: github.com/makasim/cestimator/app/cestimator/protoparser
 cpu: Apple M1 Pro
 BenchmarkStreamParse-10               96          12052191 ns/op         162.92 MB/s      225972 B/op          6 allocs/op
 PASS
-ok      github.com/makasim/cestimator/app/cestorage/protoparser 1.482s
+ok      github.com/makasim/cestimator/app/cestimator/protoparser 1.482s
 ```

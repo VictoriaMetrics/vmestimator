@@ -35,7 +35,7 @@ jobs:
 
       - name: 'Build and push'
         run: |
-          IMAGE=ghcr.io/makasim/cestorage
+          IMAGE=ghcr.io/makasim/cestimator
           docker build -t $IMAGE:latest-${{ matrix.arch }} .
           docker push $IMAGE:latest-${{ matrix.arch }}
 

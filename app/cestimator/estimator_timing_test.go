@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makasim/cestimator/app/cestorage/protoparser"
+	"github.com/makasim/cestimator/app/cestimator/protoparser"
 )
 
 func BenchmarkEstimator_WriteMetrics(b *testing.B) {

@@ -805,7 +805,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(cestorage_estimator_insert_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by(job, group_by_keys) > 0",
+          "expr": "sum(rate(cestimator_estimator_insert_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by(job, group_by_keys) > 0",
           "interval": "",
           "legendFormat": "{{ group_by_keys }} ({{job}})",
           "range": true,
@@ -925,7 +925,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "max(\n    cestorage_estimator_group_size{job=~\"$job\",instance=~\"$instance\"}\n    /\n    cestorage_estimator_group_limit{job=~\"$job\",instance=~\"$instance\"}\n) by(job,group_by_keys)",
+          "expr": "max(\n    cestimator_estimator_group_size{job=~\"$job\",instance=~\"$instance\"}\n    /\n    cestimator_estimator_group_limit{job=~\"$job\",instance=~\"$instance\"}\n) by(job,group_by_keys)",
           "interval": "",
           "legendFormat": "{{ group_by_keys }} ({{job}})",
           "range": true,
@@ -1032,7 +1032,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "max(cestorage_estimator_group_rejected_size{job=~\"$job\",instance=~\"$instance\"}) by(job,group_by_keys) > 0",
+          "expr": "max(cestimator_estimator_group_rejected_size{job=~\"$job\",instance=~\"$instance\"}) by(job,group_by_keys) > 0",
           "interval": "",
           "legendFormat": "{{ group_by_keys }} ({{job}})",
           "range": true,
@@ -1132,7 +1132,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(cestorage_write_cardinality_metrics_duration_seconds_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum(rate(cestimator_write_cardinality_metrics_duration_seconds_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "range": true,
           "refId": "A"
         }
@@ -1230,7 +1230,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(cestorage_write_cardinality_metrics_size_bytes_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum(rate(cestimator_write_cardinality_metrics_size_bytes_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "range": true,
           "refId": "A"
         }

@@ -1,5 +1,5 @@
 services:
-  cestorage:
+  cestimator:
     build: .
     command:
       - '-config=/config.yaml'
