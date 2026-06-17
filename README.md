@@ -1,6 +1,6 @@
-# cestimator
+# vmestimator
 
-`cestimator` is a cardinality estimator that receives Prometheus remote write streams
+`vmestimator` is a cardinality estimator that receives Prometheus remote write streams
 and exposes approximate time series cardinality as metrics (TODO: support remote write).
 
 It is useful for tracking how many unique time series are flowing through across all metrics, metric name, or broken down by specific labels.
@@ -13,7 +13,7 @@ The goal of this project is to evaluate whether cardinality estimation can provi
 
 Running:
 ```
-go run ./app/cestimator/... -config=streams.yaml -httpListenAddr=:8490
+go run ./app/vmestimator/... -config=streams.yaml -httpListenAddr=:8490
 ```
 
 Configuration:
@@ -44,7 +44,7 @@ streams:
 Fields:
 - `group_by` (optional): list of label names to split cardinality by; each distinct combination gets its own estimate
 - `group_limit` (optional): maximum number of distinct groups to track; excess groups are counted in a rejected sketch but not individually; defaults to `10000`
-- `buckets` (optional): number of internal shards for parallel ingestion; defaults to `min(20, availableCPUs)`
+- `buckets` (optional): number of internal shards for parallel ingestion; defaults to `min(64, 2*availableCPUs)`
 - `labels` (optional): extra labels attached to all output metrics for this estimator
 - `interval` (optional): how often to rotate (reset) counters; defaults to `5m`
 - `hll_precision` (optional): HyperLogLog precision, must be in range `[4, 18]`; higher values yield more accurate estimates at the cost of more memory; defaults to `14`
@@ -61,7 +61,10 @@ go run ./app/cegen/main.go -cardI=100 -cardY=20 -template="foo{instance=\"127.0.
 
 By default, cardinality estimates are merged with regular metrics and exposed at `/metrics`.
 
-This behavior is controlled by the `-cardinalityMetrics.exposeAt` flag:
+This behavior is controlled by the following flags:
+- `-cardinalityMetrics.cacheTTL` (default `30s`): how long to cache the cardinality metrics response before recomputing it
+
+The HTTP endpoint is controlled by the `-cardinalityMetrics.exposeAt` flag:
 - `-cardinalityMetrics.exposeAt=/metrics` (default): cardinality metrics merged with regular metrics at `/metrics`
 - `-cardinalityMetrics.exposeAt=/cardinality/metrics`: only cardinality metrics exposed at that path
 - `-cardinalityMetrics.exposeAt=`: cardinality metrics not exposed via HTTP
@@ -87,11 +90,11 @@ cardinality_estimate{interval="5m0s",env="production",region="eu-central-1",grou
 
 ## Operational metrics
 
-When grouping is enabled, cestimator exposes per-bucket operational metrics at `/metrics`:
+When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
 
-- `cestimator_group_estimator_size{groupBy, bucket}` — number of active groups in this bucket after the last rotation
-- `cestimator_group_estimator_rejected_size{groupBy, bucket}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
-- `cestimator_group_limit{groupBy, bucket}` — configured `group_limit` for this bucket
+- `vmestimator_estimator_group_size{group_by_keys, bucket}` — number of active groups in this bucket after the last rotation
+- `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
+- `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
 ## Dashboard
 
@@ -104,10 +107,10 @@ There are Grafana dashboards available in `dashboards` directory:
 
 ```
 $ go test ./... -run=none -bench=.
-?       github.com/makasim/cestimator/app/cegen [no test files]
+?       github.com/makasim/vmestimator/app/cegen [no test files]
 goos: darwin
 goarch: arm64
-pkg: github.com/makasim/cestimator/app/cestimator
+pkg: github.com/makasim/vmestimator/app/vmestimator
 cpu: Apple M1 Pro
 BenchmarkEstimator_WriteMetrics/NoGroup/NoPrev-10                 937376              1265 ns/op            1504 B/op         12 allocs/op
 BenchmarkEstimator_WriteMetrics/NoGroup/WithPrev-10               625159              1843 ns/op            1504 B/op         12 allocs/op
@@ -122,12 +125,12 @@ BenchmarkEstimator_InsertManyParallel/Group100k-10               7087110        
 BenchmarkParse_EstimatorGlobal-10                                   2656            476446 ns/op           18224 B/op         26 allocs/op
 BenchmarkParse_EstimatorGroup-10                                    4430            259190 ns/op             129 B/op          6 allocs/op
 PASS
-ok      github.com/makasim/cestimator/app/cestimator     17.104s
+ok      github.com/makasim/vmestimator/app/vmestimator     17.104s
 goos: darwin
 goarch: arm64
-pkg: github.com/makasim/cestimator/app/cestimator/protoparser
+pkg: github.com/makasim/vmestimator/app/vmestimator/protoparser
 cpu: Apple M1 Pro
 BenchmarkStreamParse-10               96          12052191 ns/op         162.92 MB/s      225972 B/op          6 allocs/op
 PASS
-ok      github.com/makasim/cestimator/app/cestimator/protoparser 1.482s
+ok      github.com/makasim/vmestimator/app/vmestimator/protoparser 1.482s
 ```
