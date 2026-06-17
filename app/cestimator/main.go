@@ -26,6 +26,8 @@ var (
 	prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
 )
 
+var estimators []*estimator
+
 func main() {
 	flag.CommandLine.SetOutput(os.Stdout)
 	envflag.Parse()
@@ -37,7 +39,7 @@ func main() {
 		logger.Fatalf("cannot load config: %v", err)
 	}
 
-	estimators := make([]*estimator, 0, len(cfg.Streams))
+	estimators = make([]*estimator, 0, len(cfg.Streams))
 	for _, ec := range cfg.Streams {
 		e, err := newEstimator(ec)
 		if err != nil {
@@ -94,6 +96,9 @@ func main() {
 				return true
 			}
 			w.WriteHeader(http.StatusNoContent)
+			return true
+		case "/clusternative/query":
+			estimatorMergeWriteStreamHandler(estimators, w, r)
 			return true
 		case "/reset":
 			for _, e := range estimators {

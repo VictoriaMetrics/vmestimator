@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -488,6 +490,147 @@ type groupSketch struct {
 	groupValueLabels string
 
 	*hyperloglog.Sketch
+}
+
+type estimatorMerge struct {
+	Sketches map[string]*hyperloglog.Sketch
+}
+
+func newEstimatorMerge() *estimatorMerge {
+	return &estimatorMerge{
+		Sketches: make(map[string]*hyperloglog.Sketch),
+	}
+}
+
+// estimatorMergeStreamHandler writes all sketches from all estimators to the response as a stream of gob-encoded EstimatorMerge objects.
+func estimatorMergeWriteStreamHandler(estimators []*estimator, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Transfer-Encoding", "chunked")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		panic("FATAL: ResponseWriter does not support flushing")
+	}
+
+	encoder := gob.NewEncoder(w)
+	streamGob := func(em *estimatorMerge) {
+		if err := encoder.Encode(em); err != nil {
+			logger.Panicf("BUG: Encoding error: %v\n", err)
+		}
+		flusher.Flush()
+	}
+
+	em := &estimatorMerge{
+		Sketches: make(map[string]*hyperloglog.Sketch),
+	}
+	for _, e := range estimators {
+		if len(e.groupBy) == 0 {
+			clear(em.Sketches)
+			em.fromGlobalEstimator(e)
+			streamGob(em)
+		} else {
+			for i := range e.buckets {
+				clear(em.Sketches)
+				em.fromEstimatorBucket(e, i)
+				streamGob(em)
+			}
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// estimatorMergeReadStreamHandler reads a stream of gob-encoded EstimatorMerge objects from the response and merges them into the provided estimatorMerge object.
+func estimatorMergeReadStreamHandler(em *estimatorMerge, resp *http.Response) {
+	defer resp.Body.Close()
+	decoder := gob.NewDecoder(resp.Body)
+	for {
+		var receivedEm estimatorMerge
+		if err := decoder.Decode(&receivedEm); err != nil {
+			if err == io.EOF {
+				break
+			}
+			logger.Panicf("BUG: Decoding error: %v\n", err)
+		}
+		em.merge(&receivedEm)
+	}
+}
+
+func (em *estimatorMerge) fromEstimatorBucket(estimator *estimator, bucket int) *estimatorMerge {
+	if bucket < 0 || bucket >= len(estimator.buckets) {
+		panic(fmt.Sprintf("BUG: bucket is out of range, bucket=%d, buckets_num=%d", bucket, len(estimator.buckets)))
+	}
+	if len(estimator.groupBy) == 0 {
+		panic("BUG: do not use this function for estimator with empty groupBy")
+	}
+
+	eb0 := estimator.buckets[0]
+
+	// TODO: refactor to avoid duplicate code in estimator.writeMetrics()
+	formatBuf := make([]byte, 0, 16384)
+	formatBuf = append(formatBuf, eb0.metricPrefix...)
+	formatBuf = append(formatBuf, `,group_by_keys="`...)
+	formatBuf = append(formatBuf, eb0.groupByKeysLabel...)
+	formatBuf = append(formatBuf, `",group_by_values=`...)
+
+	prefixLen := len(formatBuf)
+	resSK := eb0.newSketch()
+
+	eb := estimator.buckets[bucket]
+	for valuesKey, gsk := range eb.groups {
+		formatBuf = formatBuf[:prefixLen]
+
+		formatBuf = append(formatBuf, gsk.groupValueLabels...)
+
+		eb.mergeSketches(gsk.Sketch, eb.prevGroups[valuesKey].Sketch, resSK)
+
+		em.Sketches[string(formatBuf)] = resSK.Clone()
+	}
+
+	return em
+}
+
+func (em *estimatorMerge) fromGlobalEstimator(estimator *estimator) *estimatorMerge {
+	if len(estimator.groupBy) != 0 {
+		panic("BUG: do not use this function for estimator with non-empty groupBy")
+	}
+
+	eb0 := estimator.buckets[0]
+
+	// TODO: refactor to avoid duplicate code in estimator.writeMetrics()
+	formatBuf := make([]byte, 0, 1024)
+	resSK := eb0.newSketch()
+	for _, eb := range estimator.buckets {
+		eb.writeNoGroupMetric(resSK)
+	}
+
+	formatBuf = append(formatBuf, eb0.metricPrefix...)
+	formatBuf = append(formatBuf, `,group_by_keys="__global__"} `...)
+
+	em.Sketches[string(formatBuf)] = resSK.Clone()
+
+	return em
+}
+
+func (em *estimatorMerge) merge(other *estimatorMerge) {
+	for name, sketch := range other.Sketches {
+		if existing, ok := em.Sketches[name]; ok {
+			existing.Merge(sketch)
+		} else {
+			em.Sketches[name] = sketch.Clone()
+		}
+	}
+}
+
+func (em *estimatorMerge) writeMetrics(w io.Writer) {
+	formatBuf := make([]byte, 0, 1024)
+	for name, sketch := range em.Sketches {
+		formatBuf = formatBuf[:0]
+		formatBuf = append(formatBuf, name...)
+		formatBuf = strconv.AppendUint(formatBuf, sketch.Estimate(), 10)
+		formatBuf = append(formatBuf, "\n"...)
+		w.Write(formatBuf)
+	}
 }
 
 func mustNewGroupRejectSketch() *hyperloglog.Sketch {
