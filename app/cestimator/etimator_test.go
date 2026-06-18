@@ -12,7 +12,6 @@ import (
 
 	"github.com/axiomhq/hyperloglog"
 	"github.com/makasim/cestimator/app/cestimator/protoparser"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGlobalEstimate(t *testing.T) {
@@ -237,65 +236,80 @@ func TestGroupEstimate(t *testing.T) {
 	}
 
 	// group by metric name
-	f([]string{"__name__"}, genCard(10, 10, 10, ""), `
+	f(
+		[]string{"__name__"}, genCard(10, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="__name__"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="__name__",group_by_values="the_metric_name",by__name__="the_metric_name"} 1000`,
 	)
 
 	// time series does not contribute to a group
-	f([]string{"foo"}, genCard(0, 10, 10, ""), `
+	f(
+		[]string{"foo"}, genCard(0, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
 	)
-	f([]string{"foo", "bar"}, genCard(0, 0, 10, ""), `
+	f(
+		[]string{"foo", "bar"}, genCard(0, 0, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0`,
 	)
 
 	// group by one label
-	f([]string{"foo"}, genCard(1, 1, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 1, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1`,
 	)
-	f([]string{"foo"}, genCard(1, 2, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 2, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 2`,
 	)
-	f([]string{"foo"}, genCard(1, 10, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 10, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 10`,
 	)
-	f([]string{"foo"}, genCard(1, 100, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 100, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
 	)
-	f([]string{"foo"}, genCard(1, 1000, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 1000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1000`,
 	)
-	f([]string{"foo"}, genCard(1, 10000, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 10000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9957`,
 	)
-	f([]string{"foo"}, genCard(1, 50000, 0, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 50000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 50387`,
 	)
-	f([]string{"foo"}, genCard(1, 1, 1, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 1, 1, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1`,
 	)
-	f([]string{"foo"}, genCard(1, 2, 2, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 2, 2, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 4`,
 	)
-	f([]string{"foo"}, genCard(1, 10, 10, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
 	)
-	f([]string{"foo"}, genCard(1, 100, 100, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 100, 100, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9954`,
 	)
-	f([]string{"foo"}, genCard(1, 1000, 1000, ""), `
+	f(
+		[]string{"foo"}, genCard(1, 1000, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
 	)
@@ -307,11 +321,13 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 			e.rotate()
 		}
 	}
-	f([]string{"foo"}, genCardRotate(1, 10, 10, ""), `
+	f(
+		[]string{"foo"}, genCardRotate(1, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
 	)
-	f([]string{"foo"}, genCardRotate(1, 1000, 1000, ""), `
+	f(
+		[]string{"foo"}, genCardRotate(1, 1000, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
 	)
@@ -324,11 +340,13 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 			genCard(1, barCard, bazCard, "")(e)
 		}
 	}
-	f([]string{"foo"}, genCardRotateInsertSame(10, 10), `
+	f(
+		[]string{"foo"}, genCardRotateInsertSame(10, 10), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
 	)
-	f([]string{"foo"}, genCardRotateInsertSame(1000, 1000), `
+	f(
+		[]string{"foo"}, genCardRotateInsertSame(1000, 1000), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
 	)
@@ -341,12 +359,14 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 			genCard(1, barCard, bazCard, "two")(e)
 		}
 	}
-	f([]string{"foo"}, genCardRotateInsertDiff(10, 10), `
+	f(
+		[]string{"foo"}, genCardRotateInsertDiff(10, 10), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 100
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 100`,
 	)
-	f([]string{"foo"}, genCardRotateInsertDiff(1000, 1000), `
+	f(
+		[]string{"foo"}, genCardRotateInsertDiff(1000, 1000), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 995153
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 992158`,
@@ -360,24 +380,29 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0"
 			e.rotate()
 		}
 	}
-	f([]string{"foo"}, genCardRotateTwice(10, 10), `
+	f(
+		[]string{"foo"}, genCardRotateTwice(10, 10), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
 	)
-	f([]string{"foo"}, genCardRotateTwice(1000, 1000), `
+	f(
+		[]string{"foo"}, genCardRotateTwice(1000, 1000), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
 	)
 
 	// group by two labels
-	f([]string{"foo", "bar"}, genCard(1, 1, 1000, ""), `
+	f(
+		[]string{"foo", "bar"}, genCard(1, 1, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000`,
 	)
-	f([]string{"foo", "bar"}, genCard(2, 1, 1000, ""), `
+	f(
+		[]string{"foo", "bar"}, genCard(2, 1, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000`,
 	)
-	f([]string{"foo", "bar"}, genCard(2, 2, 1000, ""), `
+	f(
+		[]string{"foo", "bar"}, genCard(2, 2, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 4
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
@@ -392,7 +417,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1
 			e.rotate()
 		}
 	}
-	f([]string{"foo", "bar"}, genCardTwoLabelsRotate(), `
+	f(
+		[]string{"foo", "bar"}, genCardTwoLabelsRotate(), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 4
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
@@ -408,7 +434,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1
 			genCard(2, 2, 1000, "")(e)
 		}
 	}
-	f([]string{"foo", "bar"}, genCardTwoLabelsRotateInsertSame(), `
+	f(
+		[]string{"foo", "bar"}, genCardTwoLabelsRotateInsertSame(), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 4
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
@@ -424,7 +451,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1
 			genCard(2, 2, 1000, "two")(e)
 		}
 	}
-	f([]string{"foo", "bar"}, genCardTwoLabelsRotateInsertDiff(), `
+	f(
+		[]string{"foo", "bar"}, genCardTwoLabelsRotateInsertDiff(), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 8
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="one0,one0",by_foo="one0",by_bar="one0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="one0,one1",by_foo="one0",by_bar="one1"} 1000
@@ -444,7 +472,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="t
 			e.rotate()
 		}
 	}
-	f([]string{"foo", "bar"}, genCardTwoLabelsRotateTwice(), `
+	f(
+		[]string{"foo", "bar"}, genCardTwoLabelsRotateTwice(), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0`,
 	)
 
@@ -461,22 +490,26 @@ cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values=
 	}
 
 	// double quote in value
-	f([]string{"foo"}, genSpecialCard(`a"b`), `
+	f(
+		[]string{"foo"}, genSpecialCard(`a"b`), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\"b",by_foo="a\"b"} 1`,
 	)
 
-	f([]string{"foo"}, genSpecialCard(`a\b`), `
+	f(
+		[]string{"foo"}, genSpecialCard(`a\b`), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\\b",by_foo="a\\b"} 1`,
 	)
 
-	f([]string{"foo"}, genSpecialCard("a\nb"), `
+	f(
+		[]string{"foo"}, genSpecialCard("a\nb"), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\nb",by_foo="a\nb"} 1`,
 	)
 
-	f([]string{"foo"}, genSpecialCard("a\tb"), `
+	f(
+		[]string{"foo"}, genSpecialCard("a\tb"), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\tb",by_foo="a\tb"} 1`,
 	)
@@ -529,9 +562,10 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 	}
 
 	// all groups accepted
-	f(3, func(e *estimator) {
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 0, `
+	f(
+		3, func(e *estimator) {
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
+		}, 0, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
@@ -539,43 +573,47 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by
 	)
 
 	// 2 groups only accepted
-	f(2, func(e *estimator) {
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 1, `
+	f(
+		2, func(e *estimator) {
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
+		}, 1, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1`,
 	)
 
 	// one group only accepted
-	f(1, func(e *estimator) {
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 2, `
+	f(
+		1, func(e *estimator) {
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
+		}, 2, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1`,
 	)
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
-	f(2, func(e *estimator) {
-		// fills limit
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
-		// "a" bypasses, "c" rejected
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 1, `
+	f(
+		2, func(e *estimator) {
+			// fills limit
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
+			e.rotate()
+			// "a" bypasses, "c" rejected
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
+		}, 1, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1`,
 	)
 
 	// after rotate: new group accepted when remaining capacity allows
-	f(3, func(e *estimator) {
-		// 2 groups, limit=3
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
-		// "a" bypasses, "c" accepted (2+1=3 <= 3)
-		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 0, `
+	f(
+		3, func(e *estimator) {
+			// 2 groups, limit=3
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
+			e.rotate()
+			// "a" bypasses, "c" accepted (2+1=3 <= 3)
+			e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
+		}, 0, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
@@ -583,13 +621,14 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by
 	)
 
 	// reject 100
-	f(3, func(e *estimator) {
-		var tss []protoparser.TimeSerie
-		for i := 0; i < 103; i++ {
-			tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
-		}
-		e.insertMany(tss)
-	}, 100, `
+	f(
+		3, func(e *estimator) {
+			var tss []protoparser.TimeSerie
+			for i := 0; i < 103; i++ {
+				tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
+			}
+			e.insertMany(tss)
+		}, 100, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 103
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a0",by_foo="a0"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a1",by_foo="a1"} 1
@@ -598,7 +637,6 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a2",b
 }
 
 func TestEstimatorMerge(t *testing.T) {
-
 	t.Run("global", func(t *testing.T) {
 		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
 		if err != nil {
@@ -617,8 +655,10 @@ func TestEstimatorMerge(t *testing.T) {
 		t.Run("expect", func(t *testing.T) {
 			b := bytes.NewBuffer(nil)
 			merge.writeMetrics(b)
-
-			assert.Equal(t, `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1000`+"\n", b.String())
+			exp := `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1000` + "\n"
+			if exp != b.String() {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp)
+			}
 		})
 
 		t.Run("mergeWithOtherGlobal", func(t *testing.T) {
@@ -641,8 +681,10 @@ func TestEstimatorMerge(t *testing.T) {
 			b := bytes.NewBuffer(nil)
 			merge2.writeMetrics(b)
 
-			assert.Equal(t, `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1100`+"\n", b.String())
-
+			exp := `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1100` + "\n"
+			if exp != b.String() {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp)
+			}
 		})
 
 		t.Run("stream", func(t *testing.T) {
@@ -657,8 +699,10 @@ func TestEstimatorMerge(t *testing.T) {
 
 			b := bytes.NewBuffer(nil)
 			em.writeMetrics(b)
-
-			assert.Equal(t, `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1000`+"\n", b.String())
+			exp := `cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 1000` + "\n"
+			if exp != b.String() {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp)
+			}
 		})
 	})
 
@@ -691,9 +735,14 @@ func TestEstimatorMerge(t *testing.T) {
 		t.Run("expect", func(t *testing.T) {
 			b := bytes.NewBuffer(nil)
 			merge.writeMetrics(b)
-
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 500`)
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`)
+			exp1 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 500`
+			if !strings.Contains(b.String(), exp1) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp1)
+			}
+			exp2 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`
+			if !strings.Contains(b.String(), exp2) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp2)
+			}
 		})
 
 		t.Run("mergeWithOtherBucket", func(t *testing.T) {
@@ -720,8 +769,15 @@ func TestEstimatorMerge(t *testing.T) {
 			b := bytes.NewBuffer(nil)
 			merge2.writeMetrics(b)
 
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 1100`)
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`)
+			exp1 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 1100`
+			if !strings.Contains(b.String(), exp1) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp1)
+			}
+
+			exp2 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`
+			if !strings.Contains(b.String(), exp2) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp2)
+			}
 		})
 
 		t.Run("stream", func(t *testing.T) {
@@ -734,9 +790,14 @@ func TestEstimatorMerge(t *testing.T) {
 
 			b := bytes.NewBuffer(nil)
 			em.writeMetrics(b)
-
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 500`)
-			assert.Contains(t, b.String(), `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`)
+			exp1 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group1",by_foo="group1"} 500`
+			if !strings.Contains(b.String(), exp1) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp1)
+			}
+			exp2 := `cardinality_estimate{interval="1h0m0s",group_by_keys="foo",group_by_values="group2",by_foo="group2"} 500`
+			if !strings.Contains(b.String(), exp2) {
+				t.Errorf("got unexpected merge result: \ngot:\n%s\n\nexp:\n%s", b.String(), exp2)
+			}
 		})
 	})
 }
