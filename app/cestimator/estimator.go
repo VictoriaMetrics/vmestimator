@@ -577,13 +577,12 @@ func (em *estimatorMerge) fromEstimatorBucket(estimator *estimator, bucket int) 
 	resSK := eb0.newSketch()
 
 	eb := estimator.buckets[bucket]
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
 	for valuesKey, gsk := range eb.groups {
 		formatBuf = formatBuf[:prefixLen]
-
 		formatBuf = append(formatBuf, gsk.groupValueLabels...)
-
 		eb.mergeSketches(gsk.Sketch, eb.prevGroups[valuesKey].Sketch, resSK)
-
 		em.Sketches[string(formatBuf)] = resSK.Clone()
 	}
 
