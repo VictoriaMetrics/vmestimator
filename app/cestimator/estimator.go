@@ -520,17 +520,15 @@ func estimatorMergeWriteStreamHandler(estimators []*estimator, w http.ResponseWr
 		flusher.Flush()
 	}
 
-	em := &estimatorMerge{
-		Sketches: make(map[string]*hyperloglog.Sketch),
-	}
+	em := newEstimatorMerge()
 	for _, e := range estimators {
 		if len(e.groupBy) == 0 {
-			clear(em.Sketches)
+			em.reset()
 			em.fromGlobalEstimator(e)
 			streamGob(em)
 		} else {
 			for i := range e.buckets {
-				clear(em.Sketches)
+				em.reset()
 				em.fromEstimatorBucket(e, i)
 				streamGob(em)
 			}
@@ -630,6 +628,10 @@ func (em *estimatorMerge) writeMetrics(w io.Writer) {
 		formatBuf = append(formatBuf, "\n"...)
 		w.Write(formatBuf)
 	}
+}
+
+func (em *estimatorMerge) reset() {
+	clear(em.Sketches)
 }
 
 func mustNewGroupRejectSketch() *hyperloglog.Sketch {
