@@ -67,6 +67,10 @@ func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
 }
 
 func (s *snapshot) merge(other *snapshot) {
+	if s.GroupByKeysLabel != "" && s.GroupByKeysLabel != other.GroupByKeysLabel {
+		logger.Panicf("BUG: merge snapshots must have the same groupByKeysLabel; s: %s; other: %s", s.GroupByKeysLabel, other.GroupByKeysLabel)
+	}
+
 	for name, otherSK := range other.Sketches {
 		if existing, ok := s.Sketches[name]; ok {
 			existing.Merge(otherSK)
