@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"io"
 	"net/http"
@@ -97,8 +98,21 @@ func main() {
 			}
 			w.WriteHeader(http.StatusNoContent)
 			return true
-		case "/clusternative/query":
-			estimatorMergeWriteStreamHandler(estimators, w, r)
+		case "/clusternative/query", "/clusternative/snapshot":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Transfer-Encoding", "chunked")
+			w.WriteHeader(http.StatusOK)
+
+			bw := bufio.NewWriterSize(w, 64*1024)
+			for _, e := range estimators {
+				if err := e.writeSnapshotBinary(bw); err != nil {
+					logger.Errorf("write snapshot binary: %s", err)
+				}
+			}
+			if err := bw.Flush(); err != nil {
+				logger.Errorf("flush snapshot binary: %s", err)
+			}
+
 			return true
 		case "/reset":
 			for _, e := range estimators {
