@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -72,7 +71,7 @@ func buildTimeSeries(tmpl string, cardI, cardY int) ([]prompb.TimeSeries, error)
 		return nil, err
 	}
 
-	log.Printf("%+v", labelTmpls)
+	fmt.Printf("%+v\n", labelTmpls)
 
 	tss := make([]prompb.TimeSeries, 0, cardI*cardY)
 	for i := 0; i < cardI; i++ {
