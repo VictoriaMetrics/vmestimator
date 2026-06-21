@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"testing"
 	"time"
@@ -76,10 +77,10 @@ func TestGlobalSnapshot(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshotBinary(buf); err != nil {
-			t.Fatalf("writeSnapshotBinary: %v", err)
+		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
+			t.Fatalf("writeSnapshot: %v", err)
 		}
-		ss := make(snapshots)
+		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)
 		}); err != nil {
@@ -228,10 +229,10 @@ func TestGroupSnapshot(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshotBinary(buf); err != nil {
-			t.Fatalf("writeSnapshotBinary: %v", err)
+		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
+			t.Fatalf("writeSnapshot: %v", err)
 		}
-		ss := make(snapshots)
+		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)
 		}); err != nil {
@@ -410,10 +411,10 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshotBinary(buf); err != nil {
-			t.Fatalf("writeSnapshotBinary: %v", err)
+		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
+			t.Fatalf("writeSnapshot: %v", err)
 		}
-		ss := make(snapshots)
+		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
 			ss.add(s)
 		}); err != nil {

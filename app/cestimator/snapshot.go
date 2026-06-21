@@ -4,28 +4,42 @@ import (
 	"encoding/gob"
 	"io"
 	"strconv"
+	"sync"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/axiomhq/hyperloglog"
 )
 
-type snapshots map[string]*snapshot
+type snapshots struct {
+	mu sync.Mutex
+	m  map[string]*snapshot
+}
 
-func (ss snapshots) add(newS *snapshot) {
+func newSnapshots() *snapshots {
+	return &snapshots{m: make(map[string]*snapshot)}
+}
+
+func (ss *snapshots) add(newS *snapshot) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
 	key := newS.GroupByKeysLabel
-	if s, found := ss[key]; found {
+	if s, found := ss.m[key]; found {
 		s.merge(newS)
 		return
 	}
 
 	s := newSnapshot()
 	s.merge(newS)
-	ss[key] = s
+	ss.m[key] = s
 }
 
-func (ss snapshots) writeMetrics(w io.Writer) error {
-	for _, s := range ss {
+func (ss *snapshots) writeMetrics(w io.Writer) error {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	for _, s := range ss.m {
 		if err := s.writeMetrics(w); err != nil {
 			return err
 		}

@@ -305,9 +305,7 @@ func (e *estimator) rotate() {
 	e.groupRejectedMu.Unlock()
 }
 
-func (e *estimator) writeSnapshotBinary(w io.Writer) error {
-	enc := gob.NewEncoder(w)
-
+func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
 	if len(e.groupBy) == 0 {
 		s := newSnapshot()
 		if err := enc.Encode(convertNoGroupToSnapshot(e, s)); err != nil {
