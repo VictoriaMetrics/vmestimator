@@ -5,10 +5,6 @@ and exposes approximate time series cardinality as metrics (TODO: support remote
 
 It is useful for tracking how many unique time series are flowing through across all metrics, metric name, or broken down by specific labels.
 
-## Goal
-
-The goal of this project is to evaluate whether cardinality estimation can provide practical value within VictoriaMetrics and justify its inclusion in the core system (see [proposal](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/10848)).
-
 ## How it works
 
 Running:
