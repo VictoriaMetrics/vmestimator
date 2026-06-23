@@ -1,6 +1,6 @@
 goos: darwin
 goarch: arm64
-pkg: github.com/makasim/cestimator/app/cestimator/protoparser
+pkg: github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser
 cpu: Apple M1 Pro
 BenchmarkParse-10                             	     277	   4113905 ns/op	 119.30 MB/s	   20127 B/op	       1 allocs/op
 BenchmarkParse-10                             	     298	   3998768 ns/op	 122.73 MB/s	   18795 B/op	       1 allocs/op
@@ -93,4 +93,4 @@ BenchmarkWriteRequest_UnmarshalProtobuf/Rows=1000/Labels=2000/LabelSize=100/Grou
 BenchmarkWriteRequest_UnmarshalProtobuf/Rows=1000/Labels=2000/LabelSize=100/GroupBy=3-10    	      16	  68265445 ns/op	3617.28 MB/s	   73376 B/op	       0 allocs/op
 BenchmarkWriteRequest_UnmarshalProtobuf/Rows=1000/Labels=2000/LabelSize=100/GroupBy=3-10    	      16	  67848458 ns/op	3639.51 MB/s	   73376 B/op	       0 allocs/op
 PASS
-ok  	github.com/makasim/cestimator/app/cestimator/protoparser	115.054s
+ok  	github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser	115.054s

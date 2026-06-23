@@ -18,7 +18,7 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/procutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/pushmetrics"
 	"github.com/VictoriaMetrics/metrics"
-	"github.com/makasim/cestimator/app/cestimator/protoparser"
+	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
 var (

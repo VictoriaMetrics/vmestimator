@@ -6,10 +6,10 @@ ARG TARGETARCH
 WORKDIR /build
 COPY . .
 
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-X 'github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo.Version=cestimator-todo'" -o cestimator ./app/cestimator
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-X 'github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo.Version=vmestimator-todo'" -o vmestimator ./app/vmestimator
 
 FROM public.ecr.aws/docker/library/alpine:3.23
 
-COPY --from=builder /build/cestimator /cestimator
+COPY --from=builder /build/vmestimator /vmestimator
 
-ENTRYPOINT ["/cestimator"]
+ENTRYPOINT ["/vmestimator"]

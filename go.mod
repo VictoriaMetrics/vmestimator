@@ -1,4 +1,4 @@
-module github.com/makasim/cestimator
+module github.com/VictoriaMetrics/vmestimator
 
 go 1.26.2
 
@@ -10,7 +10,6 @@ require (
 	github.com/VictoriaMetrics/VictoriaMetrics v1.140.0
 	github.com/VictoriaMetrics/easyproto v1.2.0
 	github.com/VictoriaMetrics/metrics v1.43.1
-	github.com/VictoriaMetrics/metricsql v0.86.0
 	github.com/axiomhq/hyperloglog v0.2.6
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33
@@ -19,6 +18,7 @@ require (
 )
 
 require (
+	github.com/VictoriaMetrics/metricsql v0.86.0 // indirect
 	github.com/kamstrup/intmap v0.5.2 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/kr/text v0.2.0 // indirect

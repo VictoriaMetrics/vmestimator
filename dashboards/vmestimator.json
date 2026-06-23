@@ -698,7 +698,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(vm_protoparser_read_errors_total{job=~\"cestimator\",type=\"promremotewrite\"}[$__rate_interval])) > 0",
+          "expr": "sum(rate(vm_protoparser_read_errors_total{job=~\"vmestimator\",type=\"promremotewrite\"}[$__rate_interval])) > 0",
           "interval": "",
           "legendFormat": "{{ type }} ({{net}})",
           "range": true,
@@ -1730,7 +1730,7 @@
           "type": "prometheus",
           "uid": "${ds}"
         },
-        "definition": "label_values(vm_app_version{version=~\"^cestimator.*\"},job)",
+        "definition": "label_values(vm_app_version{version=~\"^vmestimator.*\"},job)",
         "description": "",
         "includeAll": true,
         "multi": true,
@@ -1738,7 +1738,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(vm_app_version{version=~\"^cestimator.*\"},job)",
+          "query": "label_values(vm_app_version{version=~\"^vmestimator.*\"},job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -1760,7 +1760,7 @@
           "type": "prometheus",
           "uid": "${ds}"
         },
-        "definition": "label_values(vm_app_version{job=~\"$job\", version=~\"^cestimator.*\"},instance)",
+        "definition": "label_values(vm_app_version{job=~\"$job\", version=~\"^vmestimator.*\"},instance)",
         "description": "",
         "includeAll": true,
         "multi": true,
@@ -1768,7 +1768,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(vm_app_version{job=~\"$job\", version=~\"^cestimator.*\"},instance)",
+          "query": "label_values(vm_app_version{job=~\"$job\", version=~\"^vmestimator.*\"},instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -1784,7 +1784,7 @@
   },
   "timepicker": {},
   "timezone": "utc",
-  "title": "cestimator",
+  "title": "vmestimator",
   "uid": "mkv22l4",
   "version": 20,
   "weekStart": ""

@@ -18,7 +18,7 @@ import (
 	"github.com/axiomhq/hyperloglog"
 	"github.com/dgryski/go-metro"
 
-	"github.com/makasim/cestimator/app/cestimator/protoparser"
+	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
 type estimator struct {

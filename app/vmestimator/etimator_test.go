@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makasim/cestimator/app/cestimator/protoparser"
+	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
 func TestGlobalEstimate(t *testing.T) {
