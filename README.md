@@ -12,7 +12,7 @@ Ingestion slows down, storage struggles to keep up, and in the worst case become
 
 By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability across the entire system is affected.
 
-`vmestimator` continuously tracks cardinality and exposes the results as metrics.
+`vmestimator` continuously tracks cardinality and exposes the estimation results as metrics.
 This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
