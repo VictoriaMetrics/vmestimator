@@ -12,7 +12,7 @@ Ingestion slows down, storage struggles to keep up, and in the worst case become
 
 By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability across the entire system is affected.
 
-`vmestimator` continuously tracks cardinality and exposes the estimation results as metrics.
+`vmestimator` continuously tracks cardinality and exposes the estimation results as [metrics](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#cardinality-metrics).
 This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
@@ -38,7 +38,7 @@ Example configuration:
 ```
 
 The next step is to expose cardinality estimates as metrics. 
-For this, `vmagent` should scrape the `vmestimator` `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
+For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
 <img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
 
