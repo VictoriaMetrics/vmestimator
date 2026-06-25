@@ -2,7 +2,7 @@
 
 `vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
 
-# Why measure cardinality
+# Why measure ?
 
 Imagine you're scraping metrics from dozens of Prometheus targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
@@ -54,10 +54,6 @@ ensuring cardinality visibility remains available even during incidents affectin
 
 The resulting topology looks like this:
 <img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
-
-## Use cases
-
-TODO
 
 ## Configuration
 
@@ -137,36 +133,40 @@ streams:
       region: 'eu-central-1'
 ```
 
-## Metrics
+## Cardinality Metrics
 
-By default, cardinality estimates are merged with regular metrics and exposed at `/metrics`.
+Cardinality estimates are exposed as the `cardinality_estimate` metric.
+All metrics include `interval`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
 
-This behavior is controlled by the following flags:
-- `-cardinalityMetrics.cacheTTL` (default `30s`): how long to cache the cardinality metrics response before recomputing it
-
-The HTTP endpoint is controlled by the `-cardinalityMetrics.exposeAt` flag:
-- `-cardinalityMetrics.exposeAt=/metrics` (default): cardinality metrics merged with regular metrics at `/metrics`
-- `-cardinalityMetrics.exposeAt=/cardinality/metrics`: only cardinality metrics exposed at that path
-- `-cardinalityMetrics.exposeAt=`: cardinality metrics not exposed via HTTP
-
-All metrics include `interval`, `group_by_keys`, and `group_by_values` labels. Extra labels from the `labels` config field are inserted between `interval` and `group_by_keys` (sorted alphabetically).
-
-**Without grouping** (`group_by_keys` is `__global__` and `group_by_values` is not set):
+For global estimates (no `group_by` configured), `group_by_keys` is `__global__` and `group_by_values` is omitted:
 ```
 cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 142300
 ```
 
-**With grouping** — one summary line (total distinct group count) plus one line per distinct label value combination. Each per-group line also includes individual `by_{key}="{val}"` labels for each group key:
+For grouped estimates, one summary line shows the total number of distinct groups `group_by_keys="__group__"`, followed by one line per distinct label value combination.
+Each per-group line also includes individual `by_{key}="{val}"` labels:
 ```
 cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="instance,job"} 2
 cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
 cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
 ```
 
-**With extra labels:**
-```
-cardinality_estimate{interval="5m0s",env="production",region="eu-central-1",group_by_keys="job",group_by_values="prometheus",by_job="prometheus"} 312
-```
+Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached 
+and excess groups are counted in a single shared "rejected" sketch rather than getting their own entry.
+
+By default, cardinality estimates are merged with the estimator's operational metrics and exposed at `/metrics`.
+This is controlled by the `-cardinalityMetrics.exposeAt` flag:
+- `-cardinalityMetrics.exposeAt=/metrics` (default): cardinality metrics merged with operational metrics at `/metrics`
+- `-cardinalityMetrics.exposeAt=/cardinality/metrics`: cardinality metrics exposed at separate path
+- `-cardinalityMetrics.exposeAt=`: cardinality metrics not exposed via HTTP
+
+Computing cardinality estimates is expensive, so results are cached. 
+Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`). 
+Set to `0` to disable caching entirely.
+
+## Use cases
+
+TODO
 
 ## Operational metrics
 
