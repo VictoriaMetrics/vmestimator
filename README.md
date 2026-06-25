@@ -28,7 +28,7 @@ Each `vmagent` mirrors all ingested metrics into the estimator.
 To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path. 
 It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
 
-Run vmestimator (see [configuration(https://github.com/VictoriaMetrics/vmestimator#configuration)):
+Run vmestimator (see [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration)):
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
 ```
