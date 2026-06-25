@@ -40,7 +40,8 @@ Example configuration:
 The next step is to expose cardinality estimates as metrics. 
 For this, `vmagent` should scrape the `vmestimator` `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
-<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/b0adb1c9-04c9-4a18-bbb7-3dec848000cf" />
+<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
+
 
 This setup is straightforward and introduces minimal overhead. 
 The main drawback is that cardinality data shares the same storage backend as the rest of your observability stack. 
@@ -52,8 +53,7 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/d9246bd8-8e45-41ca-93ea-0fef941c9635" />
-
+<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
 
 ## Configuration
 
