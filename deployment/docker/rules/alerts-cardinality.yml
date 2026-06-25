@@ -1,0 +1,49 @@
+# File contains default list of alerts for vmestimator service.
+# The alerts below are just recommendations and may require some updates
+# and threshold calibration according to every specific setup.
+groups:
+  - name: 'cardinality'
+    rules:
+      - alert: 'JobCardinalityThresholdExceeded'
+        expr: 'max without(job, instance) (cardinality_estimate{group_by_keys="job"}) > 5000'
+        for: '5m'
+        labels:
+          severity: 'warning'
+        annotations:
+          # todo: add link to dashboard
+          summary: "High cardinality for job {{ $labels.by_job }}"
+          description: "Job {{ $labels.by_job }} has {{ $value }} active series over the last {{ $labels.interval }}, exceeding the 5000 series threshold."
+
+      - alert: 'Cardinality10xWithin1h'
+        expr: |
+          (
+            max without(job, instance) (cardinality_estimate{group_by_keys!="__global__",group_by_keys!="__group__"})
+            /
+            max without(job, instance) (cardinality_estimate{group_by_keys!="__global__",group_by_keys!="__group__"} offset 1h)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          # todo: add link to dashboard
+          summary: "Cardinality spike for {{ $labels.group_by_keys }}={{ $labels.group_by_values }}"
+          description: >
+            {{ $labels.group_by_keys }}={{ $labels.group_by_values }} cardinality over the last {{ $labels.interval }} is {{ printf "%.1fx" $value }}, which is 10x higher than 1 hour ago.
+            Check for new high-cardinality labels recently introduced.
+
+      - alert: 'Cardinality10xWithin24h'
+        expr: |
+          (
+            max without(job, instance) (cardinality_estimate{group_by_keys!="__global__",group_by_keys!="__group__"})
+            /
+            max without(job, instance) (cardinality_estimate{group_by_keys!="__global__",group_by_keys!="__group__"} offset 24h)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          # todo: add link to dashboard
+          summary: "Cardinality spike for {{ $labels.group_by_keys }}={{ $labels.group_by_values }}"
+          description: >
+            {{ $labels.group_by_keys }}={{ $labels.group_by_values }} cardinality over the last {{ $labels.interval }} is {{ printf "%.1fx" $value }}, which is 10x higher than 24 hours ago.
+            Check for new high-cardinality labels recently introduced.
