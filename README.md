@@ -16,9 +16,9 @@ By the time someone gets paged, the damage is already done: indexes are bloated,
 This allows you to alert on cardinality spikes within minutes and identify the offending job directly from the alert. 
 Instead of discovering the problem after it impacts your infrastructure, you can react before it becomes an outage.
 
-Per-job cardinality tracking is the most actionable use case, but it's far from the only one. 
-`vmestimator` can measure cardinality across arbitrary label dimensions,
-enabling use cases such as tenant-level cardinality monitoring, usage analysis, and more granular billing.
+Per-job cardinality tracking is the most actionable use case, but it’s not the only one.
+`vmestimator` can measure cardinality across arbitrary label dimensions, 
+enabling use cases such as per-tenant usage analysis, long-term trend tracking, and capacity planning.
 
 ## Design
 
