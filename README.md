@@ -48,60 +48,94 @@ The main drawback is that cardinality data shares the same storage backend as th
 If that storage becomes unavailable, you also lose visibility into cardinality—precisely when it may be most needed. 
 
 To mitigate this, we recommend running a separate `vmsingle` instance dedicated to scraping and storing VictoriaMetrics-related monitoring signals only. 
-This pattern is commonly referred to as a monitor-of-monitors (MoM) setup. 
+This pattern is commonly referred to as a monitoring-of-monitoring (MoM) setup. 
 In this architecture, `vmestimator` metrics are isolated from production observability storage, 
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
 <img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
 
+## Use cases
+
+TODO
+
 ## Configuration
 
-Running:
-```
-go run ./app/vmestimator/... -config=streams.yaml -httpListenAddr=:8490
+To run vmestimator a `streams.yaml` config has to be provided:
+
+```bash
+/path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
 ```
 
-Configuration:
-
+Config reference:
 ```yaml
 streams:
-  # Track total cardinality with no grouping.
-  - interval: '1h'
+  -
+    # The measurement window: how long unique series are retained before the HLL sketch resets.
+    # Increases are always reflected immediately. Interval only controls how fast the estimate
+    # drops after previously seen series disappear.
+    #
+    # Short interval (e.g. '1m'): estimate clears quickly, so a resolved spike is visible fast.
+    #   Use for alerting on transient cardinality bursts.
+    # Long interval (e.g. '24h'): unique values accumulate across the full window.
+    #   Use for measuring peak or cumulative cardinality over a day.
+    #
+    # default: 5m
+    interval: '5m'
 
-  # Track cardinality grouped by metric name.
-  - interval: '1h'
-    group_by: ["__name__"]
+    # Label names used to split the cardinality estimate into per-combination groups.
+    # Each distinct combination of values for these labels gets its own estimate metric.
+    # Omit entirely for a single global estimate across all series.
+    # Examples:
+    #  - ["job"]
+    #  - ["__name__"] 
+    #  - ["vm_account_id","vm_project_id"]
+    #
+    # default: none (single global estimate)
+    group_by: ['job']
 
-  # Track cardinality grouped by job label.
-  - interval: '1m'
-    group_by: ["job"]
+    # Maximum number of distinct groups (HLL sketches) to track.
+    # Once the limit is reached, excess groups are counted in a single shared "rejected" sketch
+    # rather than getting their own entry. Acts as a memory cap and a safeguard against OOM
+    # when the group_by label values grow unboundedly.
+    # Memory upper bound per stream: 
+    #   group_limit * 2^hll_precision bytes. 
+    #
+    # default: 10000
+    group_limit: 10000
 
-  # Track cardinality grouped by tenant info
-  - group_by: ["vm_account_id", "vm_project_id"]
+    # Number of shards used to reduce lock contention during parallel ingestion.
+    # Slightly increases memory for global streams (no group_by); negligible otherwise.
+    # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
+    #
+    # default: min(64, 2*availableCPUs)
+    buckets: 64
 
-  # Track cardinality of jobs, with extra labels on the output metrics.
-  - group_by: ["job"]
+    # HyperLogLog precision p, in range [4..18].
+    # Determines the number of registers m = 2^p and the relative error 1.04 / sqrt(m):
+    #   p=14 → m=16 384, error ~0.81%, memory ~16 KB per sketch  (default, suits most cases)
+    #   p=18 → m=262 144, error ~0.20%, memory ~256 KB per sketch (billing-grade accuracy)
+    #   p=10 → m=1 024,   error ~3.25%, memory ~1 KB per sketch   (thousands of groups, memory-tight)
+    # See more in https://research.google.com/pubs/archive/40671.pdf
+    #
+    # default: 14
+    hll_precision: 14
+
+    # Whether to use the sparse HyperLogLog representation for low-cardinality groups.
+    # Sparse mode uses far less memory until a group's cardinality reaches ~2^(p-1),
+    # at which point it automatically promotes to the dense representation.
+    # See more in # See more in https://research.google.com/pubs/archive/40671.pdf
+    #
+    # default: true
+    hll_sparse: true
+
+    # Static labels attached to every output metric produced by this stream entry.
+    # Useful when multiple vmestimator instances feed the same storage and you need
+    # to distinguish their estimates in dashboards and alerts.
     labels:
-      region: 'eu-central-1'
       env: 'production'
+      region: 'eu-central-1'
 ```
-
-Fields:
-- `group_by` (optional): list of label names to split cardinality by; each distinct combination gets its own estimate
-- `group_limit` (optional): maximum number of distinct groups to track; excess groups are counted in a rejected sketch but not individually; defaults to `10000`
-- `buckets` (optional): number of internal shards for parallel ingestion; defaults to `min(64, 2*availableCPUs)`
-- `labels` (optional): extra labels attached to all output metrics for this estimator
-- `interval` (optional): how often to rotate (reset) counters; defaults to `5m`
-- `hll_precision` (optional): HyperLogLog precision, must be in range `[4, 18]`; higher values yield more accurate estimates at the cost of more memory; defaults to `14`
-- `hll_sparse` (optional): whether to use sparse HyperLogLog representation, which reduces memory for low-cardinality groups; defaults to `true`
-
-Cardinality generator:
-
-```
-go run ./app/cegen/main.go -cardI=100 -cardY=20 -template="foo{instance=\"127.0.0.[cardI]\",job=\"ametric[cardY]\"}"
-```
-
 
 ## Metrics
 
@@ -174,34 +208,3 @@ There are Grafana dashboards available in `dashboards` directory:
 <img width="1512" height="862" alt="Screenshot 2026-04-23 at 09 47 38" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
 
 
-## Benchmarks
-
-```
-$ go test ./... -run=none -bench=.
-?       github.com/makasim/vmestimator/app/cegen [no test files]
-goos: darwin
-goarch: arm64
-pkg: github.com/makasim/vmestimator/app/vmestimator
-cpu: Apple M1 Pro
-BenchmarkEstimator_WriteMetrics/NoGroup/NoPrev-10                 937376              1265 ns/op            1504 B/op         12 allocs/op
-BenchmarkEstimator_WriteMetrics/NoGroup/WithPrev-10               625159              1843 ns/op            1504 B/op         12 allocs/op
-BenchmarkEstimator_WriteMetrics/Group100/NoPrev-10                 56973             21076 ns/op            3745 B/op         81 allocs/op
-BenchmarkEstimator_WriteMetrics/Group100/WithPrev-10               43438             27834 ns/op            3745 B/op         81 allocs/op
-BenchmarkEstimator_WriteMetrics/Group10k/NoPrev-10                   807           1530942 ns/op            3106 B/op         71 allocs/op
-BenchmarkEstimator_WriteMetrics/Group10k/WithPrev-10                 580           2060489 ns/op            3107 B/op         71 allocs/op
-BenchmarkEstimator_InsertManyParallel/NoGroup-10                15398458                78.11 ns/op            0 B/op          0 allocs/op
-BenchmarkEstimator_InsertManyParallel/Group100-10               14786208                82.26 ns/op           15 B/op          1 allocs/op
-BenchmarkEstimator_InsertManyParallel/Group10k-10               13931193                84.10 ns/op           24 B/op          2 allocs/op
-BenchmarkEstimator_InsertManyParallel/Group100k-10               7087110               174.6 ns/op            24 B/op          3 allocs/op
-BenchmarkParse_EstimatorGlobal-10                                   2656            476446 ns/op           18224 B/op         26 allocs/op
-BenchmarkParse_EstimatorGroup-10                                    4430            259190 ns/op             129 B/op          6 allocs/op
-PASS
-ok      github.com/makasim/vmestimator/app/vmestimator     17.104s
-goos: darwin
-goarch: arm64
-pkg: github.com/makasim/vmestimator/app/vmestimator/protoparser
-cpu: Apple M1 Pro
-BenchmarkStreamParse-10               96          12052191 ns/op         162.92 MB/s      225972 B/op          6 allocs/op
-PASS
-ok      github.com/makasim/vmestimator/app/vmestimator/protoparser 1.482s
-```
