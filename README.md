@@ -52,7 +52,8 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/b92488e2-46c4-4ff0-adc2-d9c9f74212e2" />
+<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/d9246bd8-8e45-41ca-93ea-0fef941c9635" />
+
 
 ## Configuration
 
