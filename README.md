@@ -16,7 +16,7 @@ By the time someone gets paged, the damage is already done: indexes are bloated,
 This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
-Per-job cardinality tracking is the most actionable [use case](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#use-cases), but it’s not [the only one](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#use-cases).
+Per-job cardinality tracking is the most actionable use case, but it’s not the only one (see [examples]().
 `vmestimator` can measure cardinality across arbitrary label dimensions, 
 enabling use cases such as per-tenant usage analysis, long-term trend tracking, and capacity planning.
 
@@ -164,9 +164,32 @@ Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`). 
 Set to `0` to disable caching entirely.
 
-## Use cases
+## Examples
 
-TODO
+```
+# streams.yaml
+
+streams:
+  # Track total cardinality with no grouping.
+  - interval: '1h'
+
+  # Track cardinality grouped by metric name.
+  - interval: '1h'
+    group_by: ["__name__"]
+
+  # Track cardinality grouped by job label.
+  - interval: '1m'
+    group_by: ["job"]
+
+  # Track cardinality grouped by tenant info
+  - group_by: ["vm_account_id", "vm_project_id"]
+
+  # Track cardinality of jobs, with extra labels on the output metrics.
+  - group_by: ["job"]
+    labels:
+      region: 'eu-central-1'
+      env: 'production'
+```
 
 ## Operational metrics
 
