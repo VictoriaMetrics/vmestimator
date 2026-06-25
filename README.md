@@ -28,11 +28,16 @@ Each `vmagent` mirrors all ingested metrics into the estimator.
 To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path. 
 It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
 
-Example configuration:
+Run vmestimator (see [configuration(https://github.com/VictoriaMetrics/vmestimator#configuration)):
+```bash
+/path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
+```
+
+Run vmagent:
 ```bash
 /path/to/vmagent \
-  -remoteWrite.url=http://vmsingle:8428/api/v1/write \
-  -remoteWrite.url=http://vmestimator:8490/cardinality/api/v1/write \
+  -remoteWrite.url=http://127.0.0.1:8428/api/v1/write \
+  -remoteWrite.url=http://127.0.0.1:8490/cardinality/api/v1/write \
   -remoteWrite.disableOnDiskQueue=false,true \
   -remoteWrite.disableMetadata=false,true
 ```
