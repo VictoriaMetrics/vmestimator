@@ -4,7 +4,7 @@
 
 # Why measure ?
 
-Imagine you're scraping metrics from dozens of Prometheus targets.
+Consider a setup where metrics are scraped from dozens of Prometheus targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
 Overnight, that job's cardinality explodes from 500 to 500,000 time series.
 Suddenly, VictoriaMetrics consumes 100x more memory and disk. 
@@ -12,9 +12,9 @@ Ingestion slows down, storage struggles to keep up, and in the worst case become
 
 By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability across the entire system is affected.
 
-`vmestimator` continuously tracks cardinality and exposes the results as metrics. 
-This allows you to alert on cardinality spikes within minutes and identify the offending job directly from the alert. 
-Instead of discovering the problem after it impacts your infrastructure, you can react before it becomes an outage.
+`vmestimator` continuously tracks cardinality and exposes the results as metrics.
+This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
+Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
 Per-job cardinality tracking is the most actionable use case, but it’s not the only one.
 `vmestimator` can measure cardinality across arbitrary label dimensions, 
@@ -44,8 +44,8 @@ For this, `vmagent` should scrape the `vmestimator` `/metrics` endpoint and forw
 
 
 This setup is straightforward and introduces minimal overhead. 
-The main drawback is that cardinality data shares the same storage backend as the rest of your observability stack. 
-If that storage becomes unavailable, you also lose visibility into cardinality—precisely when it may be most needed. 
+The main drawback is that cardinality data shares the same storage with production metrics. 
+If that storage becomes unavailable, the visibility into cardinality is lost precisely when it may be most needed. 
 
 To mitigate this, we recommend running a separate `vmsingle` instance dedicated to scraping and storing VictoriaMetrics-related monitoring signals only. 
 This pattern is commonly referred to as a monitoring-of-monitoring (MoM) setup. 
