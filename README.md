@@ -1,11 +1,61 @@
 # vmestimator
 
-`vmestimator` is a cardinality estimator that receives Prometheus remote write streams
-and exposes approximate time series cardinality as metrics (TODO: support remote write).
+`vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
 
-It is useful for tracking how many unique time series are flowing through across all metrics, metric name, or broken down by specific labels.
+# Why measure cardinality
 
-## How it works
+Imagine you're scraping metrics from dozens of Prometheus targets.
+One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
+Overnight, that job's cardinality explodes from 500 to 500,000 time series.
+Suddenly, VictoriaMetrics consumes 100x more memory and disk. 
+Ingestion slows down, storage struggles to keep up, and in the worst case becomes unavailable. 
+
+By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability across the entire system is affected.
+
+`vmestimator` continuously tracks cardinality and exposes the results as metrics. 
+This allows you to alert on cardinality spikes within minutes and identify the offending job directly from the alert. 
+Instead of discovering the problem after it impacts your infrastructure, you can react before it becomes an outage.
+
+Per-job cardinality tracking is the most actionable use case, but it's far from the only one. 
+`vmestimator` can measure cardinality across arbitrary label dimensions,
+enabling use cases such as tenant-level cardinality monitoring, usage analysis, and more granular billing.
+
+## Design
+
+We recommend deploying `vmestimator` close to the metrics source, ideally alongside `vmagent` instances that scrape targets. 
+Each `vmagent` mirrors all ingested metrics into the estimator.
+
+To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path. 
+It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
+
+Example configuration:
+```bash
+/path/to/vmagent \
+  -remoteWrite.url=http://vmsingle:8428/api/v1/write \
+  -remoteWrite.url=http://vmestimator:8490/cardinality/api/v1/write \
+  -remoteWrite.disableOnDiskQueue=false,true \
+  -remoteWrite.disableMetadata=false,true
+```
+
+The next step is to expose cardinality estimates as metrics. 
+For this, `vmagent` should scrape the `vmestimator` `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
+
+TODO: image simple setup
+
+This setup is straightforward and introduces minimal overhead. 
+The main drawback is that cardinality data shares the same storage backend as the rest of your observability stack. 
+If that storage becomes unavailable, you also lose visibility into cardinality—precisely when it may be most needed. 
+
+To mitigate this, we recommend running a separate `vmsingle` instance dedicated to scraping and storing VictoriaMetrics-related monitoring signals only. 
+This pattern is commonly referred to as a monitor-of-monitors (MoM) setup. 
+In this architecture, `vmestimator` metrics are isolated from production observability storage, 
+ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
+
+The resulting topology looks like this:
+
+TODO: image setup with mom
+
+## Configuration
 
 Running:
 ```
