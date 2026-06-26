@@ -322,6 +322,40 @@ Two Grafana dashboards are available in the [dashboards](https://github.com/Vict
 
 <img width="1512" height="862" alt="Screenshot 2026-04-23 at 09 47 38" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
 
+## How to build from sources
+
+It is recommended to use the [docker images](https://hub.docker.com/r/victoriametrics/vmestimator).
+
+### Development build
+
+1. [Install Go](https://golang.org/doc/install).
+1. Run `make vmestimator` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
+   It builds `vmestimator` binary and places it into the `bin` folder.
+
+### Production build
+
+1. [Install docker](https://docs.docker.com/install/).
+1. Run `make vmestimator-prod` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
+   It builds `vmestimator-prod` binary and puts it into the `bin` folder.
+
+### Building docker images
+
+Run `make package-vmestimator`. It builds `victoriametrics/vmestimator:<PKG_TAG>` docker image locally.
+`<PKG_TAG>` is auto-generated image tag, which depends on source code in the repository.
+The `<PKG_TAG>` may be manually set via `PKG_TAG=foobar make package-vmestimator`.
+
+The base docker image is [alpine](https://hub.docker.com/_/alpine) but it is possible to use any other base image by setting it via `<ROOT_IMAGE>` environment variable. 
+For example, the following command builds the image on top of [scratch](https://hub.docker.com/_/scratch) image:
+
+```sh
+ROOT_IMAGE=scratch make package-vmrestore
+```
+
+You can build and publish to your own registry and namespace:
+```
+DOCKER_REGISTRIES=ghcr.io DOCKER_NAMESPACE=foo make publish-vmagent
+```
+
 ## Command-line flags
 
 Run `vmestimate -help` in order to see all the available options:
