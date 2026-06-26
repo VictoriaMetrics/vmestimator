@@ -171,6 +171,8 @@ Set to `0` to disable caching entirely.
 
 ## Use Cases
 
+### Basic
+
 Global cardinality:
 ```yaml
 # streams.yaml
