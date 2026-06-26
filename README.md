@@ -60,6 +60,10 @@ ensuring cardinality visibility remains available even during incidents affectin
 The resulting topology looks like this:
 <img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
 
+## Install
+
+To quickly try VictoriaMetrics, just download the VictoriaMetrics docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator) and start it with the desired [command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags). 
+
 ## Configuration
 
 To run vmestimator a `streams.yaml` config has to be provided:
