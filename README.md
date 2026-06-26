@@ -1,5 +1,3 @@
-# vmestimator
-
 `vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
 
 # Why measure ?
