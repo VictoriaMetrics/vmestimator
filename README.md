@@ -196,6 +196,42 @@ streams:
       env: 'production'
 ```
 
+## Alternative solutions
+
+### PromQL
+
+Cardinality can be estimated with PromQL.
+
+Global cardinality:
+```
+count({__name__=~".*"})
+```
+
+Top ten metric names by cardinality:
+```
+topk(10, count({__name__=~".*"}) by (__name__))
+```
+
+Top ten jobs by cardinality:
+```
+topk(10, count({__name__=~".*"}) by (job))
+```
+
+This approach works for small setups but does not scale well, because these queries scan the entire time series set.
+Most critically, if the storage is overloaded or unavailable, these queries could not be executed.
+
+### Cardinality explorer
+
+VictoriaMetrics includes a built-in [cardinality explorer](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#cardinality-explorer).
+It provides per-metric detail beyond raw series counts: query frequency, last access time, day-over-day change, and share of total cardinality.
+It is well suited for in-depth, ad-hoc investigation. 
+For example, finding metrics that are high-cardinality but rarely queried, 
+so they can be [dropped via relabeling](https://docs.victoriametrics.com/victoriametrics/relabeling/#how-to-drop-metrics-during-scrape) or reduce cardinality with [stream aggregation](https://docs.victoriametrics.com/victoriametrics/stream-aggregation/).
+
+Both tools serve different purposes and work well together.
+Use `vmestimator` for continuous monitoring, alerting, and cross-cluster cardinality tracking.
+Use the cardinality explorer when you need to drill into a specific metric or label and understand what is driving its cardinality.
+
 ## Operational metrics
 
 When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
