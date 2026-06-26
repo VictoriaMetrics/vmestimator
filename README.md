@@ -236,7 +236,9 @@ Use the cardinality explorer when you need to drill into a specific metric or la
 
 `vmestimator` supports a clustered deployment for high availability or when CPU on a single instance becomes a limiting factor.
 
-Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate.
+Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate. Cardinality estimate results should be scraped from selector nodes.
+
+<img width="2416" height="1190" alt="image" src="https://github.com/user-attachments/assets/846e5f77-378a-44dc-a4c8-2a1c64eca9d8" />
 
 **Storage nodes:**
 ```
