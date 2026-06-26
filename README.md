@@ -232,6 +232,31 @@ Both tools serve different purposes and work well together.
 Use `vmestimator` for continuous monitoring, alerting, and cross-cluster cardinality tracking.
 Use the cardinality explorer when you need to drill into a specific metric or label and understand what is driving its cardinality.
 
+## Cluster
+
+`vmestimator` supports a clustered deployment for high availability or when CPU on a single instance becomes a limiting factor.
+
+Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate.
+
+**Storage nodes:**
+```
+vmestimator -config=streams.yaml -httpListenAddr=:8491 -cardinalityMetrics.exposeAt=/cardinality/metrics
+vmestimator -config=streams.yaml -httpListenAddr=:8492 -cardinalityMetrics.exposeAt=/cardinality/metrics
+vmestimator -config=streams.yaml -httpListenAddr=:8493 -cardinalityMetrics.exposeAt=/cardinality/metrics
+```
+
+**Selector nodes:**
+```
+vmestimator -storageNode=http://vmestimator-storage-1:8491 \
+            -storageNode=http://vmestimator-storage-2:8492 \
+            -storageNode=http://vmestimator-storage-3:8493 \
+            -httpListenAddr=:8490
+```
+
+Setting `-cardinalityMetrics.exposeAt=/cardinality/metrics` on storage nodes keeps per-node estimates off the default `/metrics` path. The `/metrics` endpoint then returns only operational metrics, while `/cardinality/metrics` exposes the node's local estimate — useful for inspecting or debugging a specific node.
+
+A selector with `-storageNode` flags and no `-config` runs without local estimators and only merges remote data.
+
 ## Operational metrics
 
 When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
@@ -240,30 +265,6 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 - `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
 - `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
-## Cluster
-
-`vmestimator` can be run as a cluster for high availability or when CPU per instance becomes a limiting factor.
-
-In this mode instances are split into two roles: **storages** that receive writes, and **selectors** that read from storages and expose the merged result.
-
-**Storage nodes** — receive Prometheus remote write and serve snapshots:
-```
-vmestimator -config=streams.yaml -httpListenAddr=:8491 -cardinalityMetrics.exposeAt=/cardinality/metrics
-vmestimator -config=streams.yaml -httpListenAddr=:8492 -cardinalityMetrics.exposeAt=/cardinality/metrics
-vmestimator -config=streams.yaml -httpListenAddr=:8493 -cardinalityMetrics.exposeAt=/cardinality/metrics
-```
-
-Setting `-cardinalityMetrics.exposeAt=/cardinality/metrics` keeps cardinality estimates off the default `/metrics` path. This way `/metrics` on a storage node returns only its own operational metrics, while `/cardinality/metrics` gives you the storage's local cardinality estimates if you need to inspect or debug a specific node.
-
-**Selector nodes** — query all storage nodes, merge HyperLogLog sketches, and expose consolidated cardinality estimates:
-```
-vmestimator -storageNode=http://vmestimator-storage-1:8491 \
-            -storageNode=http://vmestimator-storage-2:8492 \
-            -storageNode=http://vmestimator-storage-3:8493 \
-            -httpListenAddr=:8490
-```
-
-When `-storageNode` flags are provided and no `-config` is specified, the selector runs without local estimators and only merges remote data.
 
 ## Dashboard
 
