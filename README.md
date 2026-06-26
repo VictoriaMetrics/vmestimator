@@ -257,6 +257,12 @@ Setting `-cardinalityMetrics.exposeAt=/cardinality/metrics` on storage nodes kee
 
 A selector with `-storageNode` flags and no `-config` runs without local estimators and only merges remote data.
 
+When multiple selector nodes are scraped, each returns a fully merged estimate.
+Deduplicate at query time to avoid overcounting:
+```
+max(cardinality_estimate) without (job)
+```
+
 ## Operational metrics
 
 When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
