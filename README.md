@@ -268,9 +268,12 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 - `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
 
-## Dashboard
+## Dashboards
 
-There are Grafana dashboards available in `dashboards` directory:
+Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
+
+- `vmestimator.json` — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
+- `cardinality-explorer.json` — cardinality analysis: global estimates, per-group-key series counts, and top-10 highest-cardinality label value combinations.
 
 <img width="1512" height="862" alt="Screenshot 2026-04-23 at 09 47 38" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
 
