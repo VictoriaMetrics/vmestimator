@@ -76,10 +76,8 @@ streams:
     # Increases are always reflected immediately. Interval only controls how fast the estimate
     # drops after previously seen series disappear.
     #
-    # Short interval (e.g. '1m'): estimate clears quickly, so a resolved spike is visible fast.
-    #   Use for alerting on transient cardinality bursts.
-    # Long interval (e.g. '24h'): unique values accumulate across the full window.
-    #   Use for measuring peak or cumulative cardinality over a day.
+    # Running two streams with different intervals (e.g. 5m and 1h) lets you derive churn rate
+    # by comparing their estimates. See Examples -> Churn Rate
     #
     # default: 5m
     interval: '5m'
