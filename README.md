@@ -16,7 +16,7 @@ By the time someone gets paged, the damage is already done: indexes are bloated,
 This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
-Per-job cardinality tracking is the most actionable use case, but it’s not the only one (see [examples](https://github.com/VictoriaMetrics/vmestimator/#examples)).
+Per-job cardinality tracking is the most actionable use case, but it’s not the only one (see [use cases](https://github.com/VictoriaMetrics/vmestimator/#use-cases)).
 `vmestimator` can measure cardinality across arbitrary label dimensions, 
 enabling use cases such as per-tenant usage analysis, long-term trend tracking, and capacity planning.
 
@@ -77,7 +77,7 @@ streams:
     # drops after previously seen series disappear.
     #
     # Running two streams with different intervals (e.g. 5m and 1h) lets you derive churn rate
-    # by comparing their estimates. See Examples -> Churn Rate
+    # by comparing their estimates. See Use Cases -> Churn Rate
     #
     # default: 5m
     interval: '5m'
@@ -167,32 +167,73 @@ Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`). 
 Set to `0` to disable caching entirely.
 
-## Examples
+## Use Cases
 
+Global cardinality:
 ```yaml
 # streams.yaml
 
-streams:
-  # Track total cardinality with no grouping.
-  - interval: '1h'
-
-  # Track cardinality grouped by metric name.
-  - interval: '1h'
-    group_by: ["__name__"]
-
-  # Track cardinality grouped by job label.
-  - interval: '1m'
-    group_by: ["job"]
-
-  # Track cardinality grouped by tenant info
-  - group_by: ["vm_account_id", "vm_project_id"]
-
-  # Track cardinality of jobs, with extra labels on the output metrics.
-  - group_by: ["job"]
-    labels:
-      region: 'eu-central-1'
-      env: 'production'
+- interval: '5m'
 ```
+
+Per metric name cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['__name__']
+```
+
+Per job label cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['job']
+```
+
+Per tenant cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['vm_account_id', 'vm_project_id']
+```
+
+### Churn rate calculation
+
+[Churn rate](https://valyala.medium.com/prometheus-storage-technical-terms-for-humans-4ab4de6c3d48#churn-rate) measures how quickly time series are created and disappear.
+[High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
+This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
+
+To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`5m`) and a long one (`1h`):
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['job']
+
+- interval: '1h'
+  group_by: ['job']
+```
+
+The short interval (`5m`) captures the currently active series. 
+The long interval (`1h`) retains all series seen over the past hour.
+When churn is low, both estimates are roughly equal. 
+When churn is high, the `1h` estimate grows significantly larger than the `5m` estimate, because the long window accumulates series that have already disappeared.
+
+The following query computes the churn ratio per job:
+```
+max(cardinality_estimate{group_by_keys="job",interval="1h0m0s"}) without (job)
+/
+(max(cardinality_estimate{group_by_keys="job",interval="5m0s"}) without (job) * 12)
+```
+
+A result near `0` means the series set is stable. The same series were active throughout the entire hour.
+A result near `1` means complete churn. Entirely different series appeared each 5-minute window.
+Values in between indicate the fraction of maximum possible churn that is occurring.
+
+This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
 
 ## Alternative solutions
 
