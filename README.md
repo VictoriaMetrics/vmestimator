@@ -1,8 +1,6 @@
-# vmestimator
-
 `vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
 
-# Why measure ?
+## Why measure ?
 
 Consider a setup where metrics are scraped from dozens of Prometheus targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
@@ -16,7 +14,7 @@ By the time someone gets paged, the damage is already done: indexes are bloated,
 This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
-Per-job cardinality tracking is the most actionable [use case](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#use-cases), but it’s not [the only one](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#use-cases).
+Per-job cardinality tracking is the most actionable use case, but it’s not the only one (see [use cases](https://github.com/VictoriaMetrics/vmestimator/#use-cases)).
 `vmestimator` can measure cardinality across arbitrary label dimensions, 
 enabling use cases such as per-tenant usage analysis, long-term trend tracking, and capacity planning.
 
@@ -28,11 +26,16 @@ Each `vmagent` mirrors all ingested metrics into the estimator.
 To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path. 
 It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
 
-Example configuration:
+Run vmestimator (see [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration)):
+```bash
+/path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
+```
+
+Run vmagent:
 ```bash
 /path/to/vmagent \
-  -remoteWrite.url=http://vmsingle:8428/api/v1/write \
-  -remoteWrite.url=http://vmestimator:8490/cardinality/api/v1/write \
+  -remoteWrite.url=http://127.0.0.1:8428/api/v1/write \
+  -remoteWrite.url=http://127.0.0.1:8490/cardinality/api/v1/write \
   -remoteWrite.disableOnDiskQueue=false,true \
   -remoteWrite.disableMetadata=false,true
 ```
@@ -40,8 +43,7 @@ Example configuration:
 The next step is to expose cardinality estimates as metrics. 
 For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
-<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
-
+<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
 
 This setup is straightforward and introduces minimal overhead. 
 The main drawback is that cardinality data shares the same storage with production metrics. 
@@ -53,7 +55,11 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-<img width="2413" height="1189" alt="image" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
+<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
+
+## Install
+
+To quickly try VictoriaMetrics, just download the VictoriaMetrics docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator) and start it with the desired [command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags). 
 
 ## Configuration
 
@@ -71,13 +77,11 @@ streams:
     # Increases are always reflected immediately. Interval only controls how fast the estimate
     # drops after previously seen series disappear.
     #
-    # Short interval (e.g. '1m'): estimate clears quickly, so a resolved spike is visible fast.
-    #   Use for alerting on transient cardinality bursts.
-    # Long interval (e.g. '24h'): unique values accumulate across the full window.
-    #   Use for measuring peak or cumulative cardinality over a day.
+    # Running two streams with different intervals (e.g. 5m and 1h) lets you derive churn rate
+    # by comparing their estimates. See Use Cases -> Churn Rate
     #
     # default: 5m
-    interval: '5m'
+    interval: 'golang duration'
 
     # Label names used to split the cardinality estimate into per-combination groups.
     # Each distinct combination of values for these labels gets its own estimate metric.
@@ -88,7 +92,7 @@ streams:
     #  - ["vm_account_id","vm_project_id"]
     #
     # default: none (single global estimate)
-    group_by: ['job']
+    group_by: 'string array'
 
     # Maximum number of distinct groups (HLL sketches) to track.
     # Once the limit is reached, excess groups are counted in a single shared "rejected" sketch
@@ -98,14 +102,14 @@ streams:
     #   group_limit * 2^hll_precision bytes. 
     #
     # default: 10000
-    group_limit: 10000
+    group_limit: 'integer'
 
     # Number of shards used to reduce lock contention during parallel ingestion.
     # Slightly increases memory for global streams (no group_by); negligible otherwise.
     # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
     #
     # default: min(64, 2*availableCPUs)
-    buckets: 64
+    buckets: 'integer'
 
     # HyperLogLog precision p, in range [4..18].
     # Determines the number of registers m = 2^p and the relative error 1.04 / sqrt(m):
@@ -115,7 +119,7 @@ streams:
     # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: 14
-    hll_precision: 14
+    hll_precision: 'integer'
 
     # Whether to use the sparse HyperLogLog representation for low-cardinality groups.
     # Sparse mode uses far less memory until a group's cardinality reaches ~2^(p-1),
@@ -123,14 +127,12 @@ streams:
     # See more in # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: true
-    hll_sparse: true
+    hll_sparse: 'boolean'
 
     # Static labels attached to every output metric produced by this stream entry.
     # Useful when multiple vmestimator instances feed the same storage and you need
     # to distinguish their estimates in dashboards and alerts.
-    labels:
-      env: 'production'
-      region: 'eu-central-1'
+    labels: 'map key string: value string'
 ```
 
 ## Cardinality Metrics
@@ -164,9 +166,144 @@ Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`). 
 Set to `0` to disable caching entirely.
 
-## Use cases
+## Use Cases
 
-TODO
+### Basic
+
+Global cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+```
+
+Per metric name cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['__name__']
+```
+
+Per job label cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['job']
+```
+
+Per tenant cardinality:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['vm_account_id', 'vm_project_id']
+```
+
+### Churn rate calculation
+
+[Churn rate](https://valyala.medium.com/prometheus-storage-technical-terms-for-humans-4ab4de6c3d48#churn-rate) measures how quickly time series are created and disappear.
+[High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
+This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
+
+To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`5m`) and a long one (`1h`):
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['job']
+
+- interval: '1h'
+  group_by: ['job']
+```
+
+The short interval (`5m`) captures the currently active series. 
+The long interval (`1h`) retains all series seen over the past hour.
+When churn is low, both estimates are roughly equal. 
+When churn is high, the `1h` estimate grows significantly larger than the `5m` estimate, because the long window accumulates series that have already disappeared.
+
+The following query computes the churn ratio per job:
+```
+max(cardinality_estimate{group_by_keys="job",interval="1h0m0s"}) without (instance)
+/
+(max(cardinality_estimate{group_by_keys="job",interval="5m0s"}) without (instance) * 12)
+```
+
+A result near `0` means the series set is stable. The same series were active throughout the entire hour.
+A result near `1` means complete churn. Entirely different series appeared each 5-minute window.
+Values in between indicate the fraction of maximum possible churn that is occurring.
+
+This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
+
+## Alternative solutions
+
+### PromQL
+
+Cardinality can be estimated with PromQL.
+
+Global cardinality:
+```
+count({__name__=~".*"})
+```
+
+Top ten metric names by cardinality:
+```
+topk(10, count({__name__=~".*"}) by (__name__))
+```
+
+Top ten jobs by cardinality:
+```
+topk(10, count({__name__=~".*"}) by (job))
+```
+
+This approach works for small setups but does not scale well, because these queries scan the entire time series set.
+Most critically, if the storage is overloaded or unavailable, these queries could not be executed.
+
+### Cardinality explorer
+
+VictoriaMetrics includes a built-in [cardinality explorer](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#cardinality-explorer).
+It provides per-metric detail beyond raw series counts: query frequency, last access time, day-over-day change, and share of total cardinality.
+It is well suited for in-depth, ad-hoc investigation. 
+For example, finding metrics that are high-cardinality but rarely queried, 
+so they can be [dropped via relabeling](https://docs.victoriametrics.com/victoriametrics/relabeling/#how-to-drop-metrics-during-scrape) or reduce cardinality with [stream aggregation](https://docs.victoriametrics.com/victoriametrics/stream-aggregation/).
+
+Both tools serve different purposes and work well together.
+Use `vmestimator` for continuous monitoring, alerting, and cross-cluster cardinality tracking.
+Use the cardinality explorer when you need to drill into a specific metric or label and understand what is driving its cardinality.
+
+## Cluster
+
+`vmestimator` supports a clustered deployment for high availability or when CPU on a single instance becomes a limiting factor.
+
+Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate. Cardinality estimate results should be scraped from selector nodes.
+
+<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/846e5f77-378a-44dc-a4c8-2a1c64eca9d8" />
+
+**Storage nodes:**
+```
+vmestimator -config=streams.yaml -httpListenAddr=:8491 -cardinalityMetrics.exposeAt=/cardinality/metrics
+vmestimator -config=streams.yaml -httpListenAddr=:8492 -cardinalityMetrics.exposeAt=/cardinality/metrics
+vmestimator -config=streams.yaml -httpListenAddr=:8493 -cardinalityMetrics.exposeAt=/cardinality/metrics
+```
+
+**Selector nodes:**
+```
+vmestimator -storageNode=http://vmestimator-storage-1:8491 \
+            -storageNode=http://vmestimator-storage-2:8492 \
+            -storageNode=http://vmestimator-storage-3:8493 \
+            -httpListenAddr=:8490
+```
+
+Setting `-cardinalityMetrics.exposeAt=/cardinality/metrics` on storage nodes keeps per-node estimates off the default `/metrics` path. The `/metrics` endpoint then returns only operational metrics, while `/cardinality/metrics` exposes the node's local estimate — useful for inspecting or debugging a specific node.
+
+A selector with `-storageNode` flags and no `-config` runs without local estimators and only merges remote data.
+
+When multiple selector nodes are scraped, each returns a fully merged estimate.
+Deduplicate at query time to avoid overcounting:
+```
+max(cardinality_estimate) without (instance)
+```
 
 ## Operational metrics
 
@@ -176,36 +313,49 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 - `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
 - `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
-## Cluster
 
-`vmestimator` can be run as a cluster for high availability or when CPU per instance becomes a limiting factor.
+## Dashboards
 
-In this mode instances are split into two roles: **storages** that receive writes, and **selectors** that read from storages and expose the merged result.
+Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
 
-**Storage nodes** — receive Prometheus remote write and serve snapshots:
+- `vmestimator.json` — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
+- `cardinality-explorer.json` — cardinality analysis: global estimates, per-group-key series counts, and top-10 highest-cardinality label value combinations.
+
+<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
+
+## How to build from sources
+
+It is recommended to use the [docker images](https://hub.docker.com/r/victoriametrics/vmestimator).
+
+### Development build
+
+1. [Install Go](https://golang.org/doc/install).
+1. Run `make vmestimator` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
+   It builds `vmestimator` binary and places it into the `bin` folder.
+
+### Production build
+
+1. [Install docker](https://docs.docker.com/install/).
+1. Run `make vmestimator-prod` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
+   It builds `vmestimator-prod` binary and puts it into the `bin` folder.
+
+### Building docker images
+
+Run `make package-vmestimator`. It builds `victoriametrics/vmestimator:<PKG_TAG>` docker image locally.
+`<PKG_TAG>` is auto-generated image tag, which depends on source code in the repository.
+The `<PKG_TAG>` may be manually set via `PKG_TAG=foobar make package-vmestimator`.
+
+The base docker image is [alpine](https://hub.docker.com/_/alpine) but it is possible to use any other base image by setting it via `<ROOT_IMAGE>` environment variable. 
+For example, the following command builds the image on top of [scratch](https://hub.docker.com/_/scratch) image:
+
+```sh
+ROOT_IMAGE=scratch make package-vmrestore
 ```
-vmestimator -config=streams.yaml -httpListenAddr=:8491 -cardinalityMetrics.exposeAt=/cardinality/metrics
-vmestimator -config=streams.yaml -httpListenAddr=:8492 -cardinalityMetrics.exposeAt=/cardinality/metrics
-vmestimator -config=streams.yaml -httpListenAddr=:8493 -cardinalityMetrics.exposeAt=/cardinality/metrics
+
+You can build and publish to your own registry and namespace:
 ```
-
-Setting `-cardinalityMetrics.exposeAt=/cardinality/metrics` keeps cardinality estimates off the default `/metrics` path. This way `/metrics` on a storage node returns only its own operational metrics, while `/cardinality/metrics` gives you the storage's local cardinality estimates if you need to inspect or debug a specific node.
-
-**Selector nodes** — query all storage nodes, merge HyperLogLog sketches, and expose consolidated cardinality estimates:
+DOCKER_REGISTRIES=ghcr.io DOCKER_NAMESPACE=foo make publish-vmagent
 ```
-vmestimator -storageNode=http://vmestimator-storage-1:8491 \
-            -storageNode=http://vmestimator-storage-2:8492 \
-            -storageNode=http://vmestimator-storage-3:8493 \
-            -httpListenAddr=:8490
-```
-
-When `-storageNode` flags are provided and no `-config` is specified, the selector runs without local estimators and only merges remote data.
-
-## Dashboard
-
-There are Grafana dashboards available in `dashboards` directory:
-
-<img width="1512" height="862" alt="Screenshot 2026-04-23 at 09 47 38" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
 
 ## Command-line flags
 
