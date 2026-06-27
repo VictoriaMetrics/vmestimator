@@ -284,13 +284,22 @@ func (e *estimator) writeMetrics(w io.Writer) {
 }
 
 func (e *estimator) runRotation(interval time.Duration) {
-	t := time.NewTicker(interval / 2)
-	defer t.Stop()
+	rotationInterval := interval / 2
 	for {
+		// Align next rotation to a fixed grid of rotationInterval since Unix epoch,
+		// so rotations happen at the same absolute times regardless of startup time.
+		now := time.Now().UnixNano()
+		period := int64(rotationInterval)
+		waitNs := period - now%period
+		if waitNs == period {
+			waitNs = 0
+		}
+		t := time.NewTimer(time.Duration(waitNs))
 		select {
 		case <-t.C:
 			e.rotate()
 		case <-e.stopCh:
+			t.Stop()
 			return
 		}
 	}
