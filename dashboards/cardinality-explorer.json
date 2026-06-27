@@ -96,8 +96,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 12,
+        "h": 12,
+        "w": 24,
         "x": 0,
         "y": 1
       },
@@ -192,6 +192,107 @@
               }
             ]
           },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"__group__\",group_by_values=~\"$group_by_keys\"}) without (instance)\n/\nmax(vmestimator_estimator_group_limit{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_values=~\"$group_by_keys\"}) without(instance)",
+          "legendFormat": "{{group_by_values}} ({{interval}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Group Keys Cardinality Limit Usage %",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
           "unit": "short"
         },
         "overrides": []
@@ -200,7 +301,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 13
       },
       "id": 3,
       "options": {
@@ -241,7 +342,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 23
       },
       "id": 5,
       "panels": [],
@@ -315,7 +416,7 @@
         "h": 15,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 24
       },
       "id": 2,
       "options": {
@@ -373,9 +474,7 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -403,9 +502,7 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -521,6 +618,6 @@
   "timezone": "utc",
   "title": "VictoriaMetrics - Cardinality Explorer",
   "uid": "mktd5h8",
-  "version": 2,
+  "version": 5,
   "weekStart": ""
 }
