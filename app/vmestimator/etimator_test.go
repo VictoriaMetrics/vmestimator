@@ -193,9 +193,10 @@ func TestGroupEstimate(t *testing.T) {
 		t.Helper()
 
 		cfg := EstimatorConfig{
-			Interval: time.Minute * 10,
-			GroupBy:  groupBy,
-			Buckets:  5,
+			Interval:   time.Minute * 10,
+			GroupBy:    groupBy,
+			GroupLimit: 12345,
+			Buckets:    5,
 		}
 
 		e, err := newEstimator(cfg)
@@ -226,65 +227,80 @@ func TestGroupEstimate(t *testing.T) {
 	// group by metric name
 	f([]string{"__name__"}, genCard(10, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="__name__"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="__name__",group_by_values="the_metric_name",by__name__="the_metric_name"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="__name__",group_by_values="the_metric_name",by__name__="the_metric_name"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__name__"} 12345`,
 	)
 
 	// time series does not contribute to a group
 	f([]string{"foo"}, genCard(0, 10, 10, ""), `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
+cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(0, 0, 10, ""), `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0`,
+cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// group by one label
 	f([]string{"foo"}, genCard(1, 1, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 2, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 2`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 2
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 10`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 10
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 100, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9957`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9957
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 50000, 0, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 50387`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 50387
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1, 1, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 2, 2, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 4`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 4
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 100, 100, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9954`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 9954
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1000, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	// group by one label, rotate
@@ -296,11 +312,13 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 	}
 	f([]string{"foo"}, genCardRotate(1, 10, 10, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotate(1, 1000, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert same
@@ -313,11 +331,13 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 	}
 	f([]string{"foo"}, genCardRotateInsertSame(10, 10), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateInsertSame(1000, 1000), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert diff
@@ -331,12 +351,14 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="0",by
 	f([]string{"foo"}, genCardRotateInsertDiff(10, 10), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 100
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 100`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 100
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateInsertDiff(1000, 1000), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 995153
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 992158`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 992158
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert diff
@@ -348,28 +370,33 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="two0"
 		}
 	}
 	f([]string{"foo"}, genCardRotateTwice(10, 10), `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
+cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateTwice(1000, 1000), `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0`,
+cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 0
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	// group by two labels
 	f([]string{"foo", "bar"}, genCard(1, 1, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(2, 1, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 2
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(2, 2, 1000, ""), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 4
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate
@@ -384,7 +411,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values=
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert same
@@ -400,7 +428,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values=
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert diff
@@ -421,7 +450,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="o
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="two0,two0",by_foo="two0",by_bar="two0"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="two0,two1",by_foo="two0",by_bar="two1"} 1000
 cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="two1,two0",by_foo="two1",by_bar="two0"} 1000
-cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="two1,two1",by_foo="two1",by_bar="two1"} 1000`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="two1,two1",by_foo="two1",by_bar="two1"} 1000
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert diff
@@ -433,7 +463,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo,bar",group_by_values="t
 		}
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotateTwice(), `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0`,
+cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo,bar"} 0
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo,bar"} 12345`,
 	)
 
 	// quote values: label values with special characters must be properly escaped
@@ -451,22 +482,26 @@ cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values=
 	// double quote in value
 	f([]string{"foo"}, genSpecialCard(`a"b`), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\"b",by_foo="a\"b"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\"b",by_foo="a\"b"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard(`a\b`), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\\b",by_foo="a\\b"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\\b",by_foo="a\\b"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard("a\nb"), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\nb",by_foo="a\nb"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\nb",by_foo="a\nb"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard("a\tb"), `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\tb",by_foo="a\tb"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a\tb",by_foo="a\tb"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 12345`,
 	)
 }
 
@@ -516,7 +551,8 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 3`,
 	)
 
 	// 2 groups only accepted
@@ -525,7 +561,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by
 	}, 1, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 2`,
 	)
 
 	// one group only accepted
@@ -533,7 +570,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
 	}, 2, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 1`,
 	)
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
@@ -546,7 +584,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by
 	}, 1, `
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 2`,
 	)
 
 	// after rotate: new group accepted when remaining capacity allows
@@ -560,7 +599,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 3`,
 	)
 
 	// reject 100
@@ -574,7 +614,8 @@ cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by
 cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 103
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a0",by_foo="a0"} 1
 cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a1",by_foo="a1"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a2",by_foo="a2"} 1`,
+cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a2",by_foo="a2"} 1
+vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="foo"} 3`,
 	)
 }
 

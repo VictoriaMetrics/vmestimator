@@ -114,17 +114,17 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		} else {
 			eb.groups = make(map[string]groupSketch)
 			eb.prevGroups = make(map[string]groupSketch)
-
-			e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{group_by_keys=%q,interval=%q,bucket="%d"}`, eb.groupByKeysLabel, eb.interval, i), func() float64 {
-				return float64(eb.groupSize.Load())
-			})
-			e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{group_by_keys=%q,interval=%q,bucket="%d"}`, eb.groupByKeysLabel, eb.interval, i), func() float64 {
-				return float64(eb.groupLimit)
-			})
 		}
 
 		e.buckets[i] = eb
 	}
+
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+		return float64(cfg.GroupLimit)
+	})
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+		return float64(e.groupSize.Load())
+	})
 
 	go e.runRotation(cfg.Interval)
 
@@ -269,6 +269,14 @@ func (e *estimator) writeMetrics(w io.Writer) {
 	formatBuf = formatBuf[:0]
 	formatBuf = appendGroupMetric(formatBuf, eb0.metricPrefix, eb0.groupByKeysLabel)
 	formatBuf = strconv.AppendInt(formatBuf, groupSize, 10)
+	formatBuf = append(formatBuf, "\n"...)
+	if _, err := w.Write(formatBuf); err != nil {
+		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+	}
+
+	formatBuf = formatBuf[:0]
+	formatBuf = appendGroupLimitMetric(formatBuf, eb0.groupByKeysLabel, eb0.interval)
+	formatBuf = strconv.AppendInt(formatBuf, eb0.groupLimit, 10)
 	formatBuf = append(formatBuf, "\n"...)
 	if _, err := w.Write(formatBuf); err != nil {
 		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
@@ -544,6 +552,18 @@ func appendGlobalMetric(buf []byte, metricPrefix string) []byte {
 func appendGroupMetric(buf []byte, metricPrefix, groupByKeysLabel string) []byte {
 	buf = append(buf, metricPrefix...)
 	buf = append(buf, `,group_by_keys="__group__",group_by_values="`...)
+	buf = append(buf, groupByKeysLabel...)
+	buf = append(buf, `"} `...)
+	return buf
+}
+
+// appendGroupLimitMetric produces:
+// 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
+func appendGroupLimitMetric(buf []byte, groupByKeysLabel string, interval time.Duration) []byte {
+	buf = buf[:0]
+	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
+	buf = append(buf, interval.String()...)
+	buf = append(buf, `",group_by_keys="`...)
 	buf = append(buf, groupByKeysLabel...)
 	buf = append(buf, `"} `...)
 	return buf

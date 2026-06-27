@@ -5,6 +5,7 @@ import (
 	"io"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -50,9 +51,11 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 
 type snapshot struct {
 	MetricPrefix        string
+	Interval            time.Duration
 	GroupByKeysLabel    string
 	GroupRejectedSketch *hyperloglog.Sketch
 	GroupBy             []string
+	GroupLimit          int64
 	// prom string metric => hll
 	Sketches map[string]*hyperloglog.Sketch
 }
@@ -93,9 +96,11 @@ func (s *snapshot) merge(other *snapshot) {
 		}
 	}
 
+	s.Interval = other.Interval
 	s.MetricPrefix = other.MetricPrefix
+	s.GroupLimit = other.GroupLimit
 	s.GroupByKeysLabel = other.GroupByKeysLabel
-	s.GroupBy = append(s.GroupBy, other.GroupBy...)
+	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
 	if other.GroupRejectedSketch != nil {
 		if s.GroupRejectedSketch == nil {
 			s.GroupRejectedSketch = other.GroupRejectedSketch.Clone()
@@ -133,15 +138,25 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 		if _, err := w.Write(formatBuf); err != nil {
 			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 		}
+
+		formatBuf = formatBuf[:0]
+		formatBuf = appendGroupLimitMetric(formatBuf, s.GroupByKeysLabel, s.Interval)
+		formatBuf = strconv.AppendInt(formatBuf, s.GroupLimit, 10)
+		formatBuf = append(formatBuf, "\n"...)
+		if _, err := w.Write(formatBuf); err != nil {
+			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		}
 	}
 
 	return nil
 }
 
 func (s *snapshot) reset() {
+	s.GroupLimit = 0
 	s.GroupByKeysLabel = ""
 	s.GroupRejectedSketch = nil
 	s.MetricPrefix = ""
+	s.Interval = 0
 	s.GroupBy = s.GroupBy[:0]
 	clear(s.Sketches)
 }
@@ -229,9 +244,11 @@ func convertGroupBucketToSnapshot(eb *estimatorBucket, s *snapshot, formatBuf []
 		s.Sketches[string(formatBuf)] = resSK.Clone()
 	}
 
+	s.GroupLimit = eb.groupLimit
 	s.GroupByKeysLabel = eb.groupByKeysLabel
 	s.MetricPrefix = eb.metricPrefix
 	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)
+	s.Interval = eb.interval
 
 	return s
 }
