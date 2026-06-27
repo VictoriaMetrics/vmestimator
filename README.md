@@ -57,7 +57,7 @@ ensuring cardinality visibility remains available even during incidents affectin
 The resulting topology looks like this:
 <img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
 
-## Quick Start
+## Install
 
 Create a minimal [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration) file:
 ```yaml
