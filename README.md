@@ -45,7 +45,6 @@ For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward 
 
 <img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
 
-
 This setup is straightforward and introduces minimal overhead. 
 The main drawback is that cardinality data shares the same storage with production metrics. 
 If that storage becomes unavailable, the visibility into cardinality is lost precisely when it may be most needed. 
@@ -228,9 +227,9 @@ When churn is high, the `1h` estimate grows significantly larger than the `5m` e
 
 The following query computes the churn ratio per job:
 ```
-max(cardinality_estimate{group_by_keys="job",interval="1h0m0s"}) without (job)
+max(cardinality_estimate{group_by_keys="job",interval="1h0m0s"}) without (instance)
 /
-(max(cardinality_estimate{group_by_keys="job",interval="5m0s"}) without (job) * 12)
+(max(cardinality_estimate{group_by_keys="job",interval="5m0s"}) without (instance) * 12)
 ```
 
 A result near `0` means the series set is stable. The same series were active throughout the entire hour.
@@ -305,7 +304,7 @@ A selector with `-storageNode` flags and no `-config` runs without local estimat
 When multiple selector nodes are scraped, each returns a fully merged estimate.
 Deduplicate at query time to avoid overcounting:
 ```
-max(cardinality_estimate) without (job)
+max(cardinality_estimate) without (instance)
 ```
 
 ## Operational metrics
