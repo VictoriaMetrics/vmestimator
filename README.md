@@ -220,27 +220,35 @@ Per tenant cardinality:
 [High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
 This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
 
-To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`5m`) and a long one (`1h`):
+To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`15m`) and a long one (`30m`):
 ```yaml
 # streams.yaml
 
-- interval: '5m'
+- interval: '15m'
   group_by: ['job']
 
-- interval: '1h'
+- interval: '30m'
   group_by: ['job']
 ```
 
-The short interval (`5m`) captures the currently active series. 
-The long interval (`1h`) retains all series seen over the past hour.
 When churn is low, both estimates are roughly equal. 
-When churn is high, the `1h` estimate grows significantly larger than the `5m` estimate, because the long window accumulates series that have already disappeared.
+When churn is high, the `30m` estimate grows significantly larger than the `15m` estimate, because the long window accumulates series that have already disappeared.
 
 The following query computes the churn ratio per job:
 ```
-max(cardinality_estimate{group_by_keys="job",interval="1h0m0s"}) without (instance)
+(
+    sum(
+        max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
+    ) by (group_by_keys,group_by_values)
+    -
+    sum(
+        max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
+    ) by (group_by_keys,group_by_values)
+)
 /
-(max(cardinality_estimate{group_by_keys="job",interval="5m0s"}) without (instance) * 12)
+sum(
+    max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
+) by (group_by_keys,group_by_values) * 100
 ```
 
 A result near `0` means the series set is stable. The same series were active throughout the entire hour.
