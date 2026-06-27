@@ -81,7 +81,7 @@ streams:
     # by comparing their estimates. See Use Cases -> Churn Rate
     #
     # default: 5m
-    interval: '5m'
+    interval: 'golang duration'
 
     # Label names used to split the cardinality estimate into per-combination groups.
     # Each distinct combination of values for these labels gets its own estimate metric.
@@ -92,7 +92,7 @@ streams:
     #  - ["vm_account_id","vm_project_id"]
     #
     # default: none (single global estimate)
-    group_by: ['job']
+    group_by: 'string array'
 
     # Maximum number of distinct groups (HLL sketches) to track.
     # Once the limit is reached, excess groups are counted in a single shared "rejected" sketch
@@ -102,14 +102,14 @@ streams:
     #   group_limit * 2^hll_precision bytes. 
     #
     # default: 10000
-    group_limit: 10000
+    group_limit: 'integer'
 
     # Number of shards used to reduce lock contention during parallel ingestion.
     # Slightly increases memory for global streams (no group_by); negligible otherwise.
     # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
     #
     # default: min(64, 2*availableCPUs)
-    buckets: 64
+    buckets: 'integer'
 
     # HyperLogLog precision p, in range [4..18].
     # Determines the number of registers m = 2^p and the relative error 1.04 / sqrt(m):
@@ -119,7 +119,7 @@ streams:
     # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: 14
-    hll_precision: 14
+    hll_precision: 'integer'
 
     # Whether to use the sparse HyperLogLog representation for low-cardinality groups.
     # Sparse mode uses far less memory until a group's cardinality reaches ~2^(p-1),
@@ -127,14 +127,12 @@ streams:
     # See more in # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: true
-    hll_sparse: true
+    hll_sparse: 'boolean'
 
     # Static labels attached to every output metric produced by this stream entry.
     # Useful when multiple vmestimator instances feed the same storage and you need
     # to distinguish their estimates in dashboards and alerts.
-    labels:
-      env: 'production'
-      region: 'eu-central-1'
+    labels: 'map key string: value string'
 ```
 
 ## Cardinality Metrics
