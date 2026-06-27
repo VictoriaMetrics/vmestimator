@@ -59,16 +59,15 @@ The resulting topology looks like this:
 
 ## Install
 
-Docker images are available on [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) and [Quay](https://quay.io/repository/victoriametrics/vmestimator).
-
 Create a minimal [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration) file:
 ```yaml
 # streams.yaml
+
 - interval: '5m'
   group_by: ['job']
 ```
 
-Run the container, mounting your config file:
+Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
 ```bash
 docker run --rm \
   -p 8490:8490 \
@@ -77,7 +76,8 @@ docker run --rm \
   -config=/streams.yaml
 ```
 
-See [Use Cases](https://github.com/VictoriaMetrics/vmestimator#use-cases) for more configuration examples and [Command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags) for all available options.
+See [Use Cases](https://github.com/VictoriaMetrics/vmestimator#use-cases) for more configuration examples and 
+[Command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags) for all available options.
 
 To build from sources, see [How to build from sources](https://github.com/VictoriaMetrics/vmestimator#how-to-build-from-sources).
 
