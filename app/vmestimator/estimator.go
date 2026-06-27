@@ -563,7 +563,7 @@ func appendGroupLimitMetric(buf []byte, groupByKeysLabel string, interval time.D
 	buf = buf[:0]
 	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
 	buf = append(buf, interval.String()...)
-	buf = append(buf, `",group_by_keys="`...)
+	buf = append(buf, `",group_by_keys="__group__",group_by_values="`...)
 	buf = append(buf, groupByKeysLabel...)
 	buf = append(buf, `"} `...)
 	return buf
