@@ -125,7 +125,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "max(max_over_time(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",group_by_keys=~\"__global__\"}[1m])) by (interval)",
+          "expr": "sum(\n    max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",group_by_keys=~\"__global__\"}) without(instance)\n) by (interval)\n\n",
           "legendFormat": "{{interval}}",
           "range": true,
           "refId": "A"
@@ -226,7 +226,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"__group__\"}) by (interval,group_by_values)",
+          "expr": "sum(\n    max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"__group__\"}) without (instance)\n) by (interval,group_by_values)",
           "legendFormat": "{{group_by_values}} ({{interval}})",
           "range": true,
           "refId": "A"
@@ -341,7 +341,7 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "topk(10, max(max_over_time(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}[1m])) without (job,instance))",
+          "expr": "topk(\n    10, \n    sum(\n        max(\n            cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}) without (instance)\n    ) by (group_by_values,interval)\n)",
           "legendFormat": "{{group_by_values}} ({{interval}})",
           "range": true,
           "refId": "A"
@@ -359,8 +359,8 @@
     "list": [
       {
         "current": {
-          "text": "prometheus",
-          "value": "P1809F7CD0C75ACF3"
+          "text": "sandbox-monitoring",
+          "value": "PB894574A363DF0AF"
         },
         "name": "ds",
         "options": [],
@@ -374,10 +374,10 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "cardinality-explorer"
+            "All"
           ],
           "value": [
-            "cardinality-explorer"
+            "$__all"
           ]
         },
         "datasource": {
@@ -404,10 +404,10 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "192.168.50.102:8490"
+            "All"
           ],
           "value": [
-            "192.168.50.102:8490"
+            "$__all"
           ]
         },
         "datasource": {
@@ -519,8 +519,8 @@
   },
   "timepicker": {},
   "timezone": "utc",
-  "title": "Cardinality Explorer",
+  "title": "VictoriaMetrics - Cardinality Explorer",
   "uid": "mktd5h8",
-  "version": 14,
+  "version": 2,
   "weekStart": ""
 }
