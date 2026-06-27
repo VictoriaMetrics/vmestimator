@@ -59,14 +59,7 @@ The resulting topology looks like this:
 
 ## Install
 
-Create a minimal [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration) file:
-```yaml
-# streams.yaml
-
-- interval: '5m'
-  group_by: ['job']
-```
-
+Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml).
 Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
 ```bash
 docker run --rm \
@@ -83,7 +76,7 @@ To build from sources, see [How to build from sources](https://github.com/Victor
 
 ## Configuration
 
-To run vmestimator a `streams.yaml` config has to be provided:
+To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml):
 
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
@@ -386,7 +379,7 @@ Usage of ./bin/vmestimator:
   -cardinalityMetrics.exposeAt string
         HTTP path for exposing cardinality metrics. If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. If set to a different path, only cardinality metrics are exposed at that endpoint. If set to an empty value, cardinality metrics are not exposed via HTTP at all. (default "/metrics")
   -config string
-        Path to YAML configuration file
+        Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml for config example
   -enableTCP6
         Whether to enable IPv6 for listening and dialing. By default, only IPv4 TCP and UDP are used
   -envflag.enable
@@ -411,6 +404,8 @@ Usage of ./bin/vmestimator:
         Disable compression of HTTP responses to save CPU resources. By default, compression is enabled to save network bandwidth
   -http.header.csp string
         Value for 'Content-Security-Policy' header, recommended: "default-src 'self'"
+  -http.header.disableServerHostname
+        Whether to disable 'X-Server-Hostname' header in HTTP responses
   -http.header.frameOptions string
         Value for 'X-Frame-Options' header
   -http.header.hsts string
@@ -465,7 +460,7 @@ Usage of ./bin/vmestimator:
         The maximum size in bytes of a single Prometheus remote_write API request
         Supports the following optional suffixes for size values: KB, MB, GB, TB, KiB, MiB, GiB, TiB (default 33554432)
   -memory.allowedBytes size
-        Allowed size of system memory VictoriaMetrics caches may occupy. This option overrides -memory.allowedPercent if set to a non-zero value. Too low a value may increase the cache miss rate usually resulting in higher CPU and disk IO usage. Too high a value may evict too much data from the OS page cache resulting in higher disk IO usage
+        Allowed size of system memory VictoriaMetrics caches may occupy. This option overrides -memory.allowedPercent if set to a non-zero value. Too low a value may increase the cache miss rate usually resulting in higher CPU and disk IO usage. Too high a value may evict too much data from the OS page cache resulting in higher disk IO usage. The process may behave unexpectedly if this flag is set too small (e.g., 1 byte).
         Supports the following optional suffixes for size values: KB, MB, GB, TB, KiB, MiB, GiB, TiB (default 0)
   -memory.allowedPercent float
         Allowed percent of system memory VictoriaMetrics caches may occupy. See also -memory.allowedBytes. Too low a value may increase cache miss rate usually resulting in higher CPU and disk IO usage. Too high a value may evict too much data from the OS page cache which will result in higher disk IO usage (default 60)
