@@ -25,7 +25,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          # todo: add link to dashboard
+          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys=job&var-interval={{ $labels.interval }}"
           summary: "Cardinality spike for {{ $labels.group_by_keys }}={{ $labels.group_by_values }}"
           description: >
             {{ $labels.group_by_keys }}={{ $labels.group_by_values }} cardinality over the last {{ $labels.interval }} is {{ printf "%.1fx" $value }}, which is 10x higher than 1 hour ago.
@@ -42,7 +42,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          # todo: add link to dashboard
+          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys=job&var-interval={{ $labels.interval }}"
           summary: "Cardinality spike for {{ $labels.group_by_keys }}={{ $labels.group_by_values }}"
           description: >
             {{ $labels.group_by_keys }}={{ $labels.group_by_values }} cardinality over the last {{ $labels.interval }} is {{ printf "%.1fx" $value }}, which is 10x higher than 24 hours ago.
