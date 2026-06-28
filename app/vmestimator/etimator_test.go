@@ -536,10 +536,7 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 		e.writeMetrics(buf)
 		assertMetricsSame(t, "", expMetrics, buf.String())
 
-		var actRejected int
-		if e.groupSize.rejectSketches[0] != nil {
-			actRejected = int(e.groupSize.rejectSketches[0].Estimate())
-		}
+		actRejected := int(e.groupSize.totalRejected())
 		if expRejected != actRejected {
 			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
 		}

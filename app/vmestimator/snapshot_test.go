@@ -357,7 +357,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 	}
 
-	f := func(groupLimit int, gen func(e *estimator), expRejected int) {
+	f := func(groupLimit int, gen func(e *estimator)) {
 		t.Helper()
 
 		cfg := EstimatorConfig{
@@ -407,17 +407,17 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 	// all groups accepted
 	f(3, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 0)
+	})
 
 	// 2 groups only accepted
 	f(2, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 1)
+	})
 
 	// one group only accepted
 	f(1, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 2)
+	})
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
 	f(2, func(e *estimator) {
@@ -426,7 +426,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		e.rotate()
 		// "a" bypasses, "c" rejected
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 1)
+	})
 
 	// after rotate: new group accepted when remaining capacity allows
 	f(3, func(e *estimator) {
@@ -435,7 +435,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		e.rotate()
 		// "a" bypasses, "c" accepted (2+1=3 <= 3)
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 0)
+	})
 
 	// reject 100
 	f(3, func(e *estimator) {
@@ -444,5 +444,5 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 			tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
 		}
 		e.insertMany(tss)
-	}, 100)
+	})
 }
