@@ -279,20 +279,11 @@ func (e *estimator) runRotation(interval time.Duration) {
 }
 
 func (e *estimator) rotate() {
-	//e.groupSize.Store(0)
-
 	var wg sync.WaitGroup
 	for i := range e.buckets {
 		wg.Go(e.buckets[i].rotate)
 	}
 	wg.Wait()
-
-	//e.groupRejectedMu.Lock()
-	//prevSK := e.groupRejectedSketchPrev
-	//prevSK.Reset()
-	//e.groupRejectedSketchPrev = e.groupRejectedSketch
-	//e.groupRejectedSketch = prevSK
-	//e.groupRejectedMu.Unlock()
 }
 
 func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
