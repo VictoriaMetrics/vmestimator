@@ -214,7 +214,7 @@ Per tenant cardinality:
   group_by: ['vm_account_id', 'vm_project_id']
 ```
 
-### Churn rate calculation
+### Churn calculation
 
 [Churn rate](https://valyala.medium.com/prometheus-storage-technical-terms-for-humans-4ab4de6c3d48#churn-rate) measures how quickly time series are created and disappear.
 [High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
@@ -281,7 +281,7 @@ topk(10, count({__name__=~".*"}) by (job))
 This approach works for small setups but does not scale well, because these queries scan the entire time series set.
 Most critically, if the storage is overloaded or unavailable, these queries could not be executed.
 
-### Cardinality explorer
+### Cardinality Explorer
 
 VictoriaMetrics includes a built-in [cardinality explorer](https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#cardinality-explorer).
 It provides per-metric detail beyond raw series counts: query frequency, last access time, day-over-day change, and share of total cardinality.
