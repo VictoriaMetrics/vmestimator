@@ -425,7 +425,8 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 
 	gsk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		if _, ok := eb.prevGroups[groupValuesKey]; !ok {
+		prevGSK, ok := eb.prevGroups[groupValuesKey]
+		if !ok {
 			groupSize := eb.groupSize.Load()
 			if groupSize+1 > eb.groupLimit {
 				eb.groupRejectedMu.Lock()
@@ -433,27 +434,31 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 				eb.groupRejectedMu.Unlock()
 				return
 			}
-
 			eb.groupSize.Add(1)
 		}
 
-		formatBuf := make([]byte, 0, 1024)
-		formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey)
-		for i := range groupValues {
-			formatBuf = append(formatBuf, ',')
-			if eb.groupBy[i] == `__name__` {
-				formatBuf = append(formatBuf, `by__name__`...)
-			} else {
-				formatBuf = append(formatBuf, `by_`...)
-				formatBuf = append(formatBuf, eb.groupBy[i]...)
+		groupValueLabels := prevGSK.groupValueLabels
+		if len(groupValueLabels) == 0 {
+			formatBuf := make([]byte, 0, 1024)
+			formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey)
+			for i := range groupValues {
+				formatBuf = append(formatBuf, ',')
+				if eb.groupBy[i] == `__name__` {
+					formatBuf = append(formatBuf, `by__name__`...)
+				} else {
+					formatBuf = append(formatBuf, `by_`...)
+					formatBuf = append(formatBuf, eb.groupBy[i]...)
+				}
+				formatBuf = append(formatBuf, '=')
+				formatBuf = strconv.AppendQuote(formatBuf, groupValues[i])
 			}
-			formatBuf = append(formatBuf, '=')
-			formatBuf = strconv.AppendQuote(formatBuf, groupValues[i])
+			formatBuf = append(formatBuf, `} `...)
+
+			groupValueLabels = bytesutil.ToUnsafeString(formatBuf)
 		}
-		formatBuf = append(formatBuf, `} `...)
 
 		gsk = groupSketch{
-			groupValueLabels: bytesutil.ToUnsafeString(formatBuf),
+			groupValueLabels: groupValueLabels,
 
 			Sketch: eb.newSketch(),
 		}
