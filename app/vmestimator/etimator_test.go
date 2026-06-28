@@ -61,8 +61,9 @@ func TestGlobalEstimate(t *testing.T) {
 			if eb.groups != nil {
 				t.Fatalf("expected bucket %d groups length to be 0 but got %d", i, len(eb.groups))
 			}
-			if eb.groupSize.Load() != 0 {
-				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, eb.groupSize.Load())
+			size := eb.groupSize.totalSize()
+			if size != 0 {
+				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, size)
 			}
 		}
 
@@ -536,8 +537,8 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 		assertMetricsSame(t, "", expMetrics, buf.String())
 
 		var actRejected int
-		if e.buckets[0].groupRejectedSketch != nil {
-			actRejected = int(e.buckets[0].groupRejectedSketch.Estimate())
+		if e.groupSize.rejectSketches[0] != nil {
+			actRejected = int(e.groupSize.rejectSketches[0].Estimate())
 		}
 		if expRejected != actRejected {
 			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)

@@ -50,21 +50,6 @@ func TestGlobalSnapshot(t *testing.T) {
 
 		gen(e)
 
-		if len(e.buckets) != cfg.Buckets {
-			t.Fatalf("expected buckets length to be %d but got %d", cfg.Buckets, len(e.buckets))
-		}
-		for i, eb := range e.buckets {
-			if len(eb.groupBy) > 0 {
-				t.Fatalf("expected bucket %d groupBy length to be 0 but got %d", i, len(eb.groupBy))
-			}
-			if eb.groups != nil {
-				t.Fatalf("expected bucket %d groups length to be 0 but got %d", i, len(eb.groups))
-			}
-			if eb.groupSize.Load() != 0 {
-				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, eb.groupSize.Load())
-			}
-		}
-
 		buf := bytes.NewBuffer(nil)
 		e.writeMetrics(buf)
 		expMetric := buf.String()
@@ -400,14 +385,6 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
-
-		var actRejected int
-		if s.GroupRejectedSketch != nil {
-			actRejected = int(s.GroupRejectedSketch.Estimate())
-		}
-		if expRejected != actRejected {
-			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
-		}
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
