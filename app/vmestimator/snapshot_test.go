@@ -50,21 +50,6 @@ func TestGlobalSnapshot(t *testing.T) {
 
 		gen(e)
 
-		if len(e.buckets) != cfg.Buckets {
-			t.Fatalf("expected buckets length to be %d but got %d", cfg.Buckets, len(e.buckets))
-		}
-		for i, eb := range e.buckets {
-			if len(eb.groupBy) > 0 {
-				t.Fatalf("expected bucket %d groupBy length to be 0 but got %d", i, len(eb.groupBy))
-			}
-			if eb.groups != nil {
-				t.Fatalf("expected bucket %d groups length to be 0 but got %d", i, len(eb.groups))
-			}
-			if eb.groupSize.Load() != 0 {
-				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, eb.groupSize.Load())
-			}
-		}
-
 		buf := bytes.NewBuffer(nil)
 		e.writeMetrics(buf)
 		expMetric := buf.String()
@@ -372,7 +357,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 	}
 
-	f := func(groupLimit int, gen func(e *estimator), expRejected int) {
+	f := func(groupLimit int, gen func(e *estimator)) {
 		t.Helper()
 
 		cfg := EstimatorConfig{
@@ -401,14 +386,6 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
 
-		var actRejected int
-		if s.GroupRejectedSketch != nil {
-			actRejected = int(s.GroupRejectedSketch.Estimate())
-		}
-		if expRejected != actRejected {
-			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
-		}
-
 		// test encode/decode snapshot produce same result
 		buf.Reset()
 		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
@@ -430,17 +407,17 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 	// all groups accepted
 	f(3, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 0)
+	})
 
 	// 2 groups only accepted
 	f(2, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 1)
+	})
 
 	// one group only accepted
 	f(1, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 2)
+	})
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
 	f(2, func(e *estimator) {
@@ -449,7 +426,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		e.rotate()
 		// "a" bypasses, "c" rejected
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 1)
+	})
 
 	// after rotate: new group accepted when remaining capacity allows
 	f(3, func(e *estimator) {
@@ -458,7 +435,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		e.rotate()
 		// "a" bypasses, "c" accepted (2+1=3 <= 3)
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 0)
+	})
 
 	// reject 100
 	f(3, func(e *estimator) {
@@ -467,5 +444,5 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 			tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
 		}
 		e.insertMany(tss)
-	}, 100)
+	})
 }
