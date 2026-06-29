@@ -257,12 +257,15 @@ func (e *estimator) writeMetrics(w io.Writer) {
 }
 
 func (e *estimator) runRotation(interval time.Duration) {
-	rotationInterval := interval / 2
+	// Divide the rotation interval evenly among buckets so each bucket rotates
+	// at a different time, reducing the sawtooth effect.
+	bucketInterval := interval / 2 / time.Duration(len(e.buckets))
+	period := int64(bucketInterval)
+	bucketIdx := 0
 	for {
-		// Align next rotation to a fixed grid of rotationInterval since Unix epoch,
+		// Align next tick to a fixed grid of bucketInterval since Unix epoch,
 		// so rotations happen at the same absolute times regardless of startup time.
 		now := time.Now().UnixNano()
-		period := int64(rotationInterval)
 		waitNs := period - now%period
 		if waitNs == period {
 			waitNs = 0
@@ -270,20 +273,13 @@ func (e *estimator) runRotation(interval time.Duration) {
 		t := time.NewTimer(time.Duration(waitNs))
 		select {
 		case <-t.C:
-			e.rotate()
+			e.buckets[bucketIdx].rotate()
+			bucketIdx = (bucketIdx + 1) % len(e.buckets)
 		case <-e.stopCh:
 			t.Stop()
 			return
 		}
 	}
-}
-
-func (e *estimator) rotate() {
-	var wg sync.WaitGroup
-	for i := range e.buckets {
-		wg.Go(e.buckets[i].rotate)
-	}
-	wg.Wait()
 }
 
 func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
