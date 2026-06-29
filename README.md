@@ -374,9 +374,10 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
 
 - [VictoriaMetrics - vmestimator](https://play-grafana.victoriametrics.com/d/mkv22l4/victoriametrics-vmestimator) — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
-- [VictoriaMetrics - Cardinality Explorer](https://play-grafana.victoriametrics.com/d/mktd5h8/victoriametrics-cardinality-explorer) — cardinality analysis: global estimates, per-group-key series counts, and top-10 highest-cardinality label value combinations.
+<img width="1507" height="801" alt="Screenshot 2026-06-29 at 19 06 46" src="https://github.com/user-attachments/assets/cbfd979d-f403-4270-b098-2d2f0b392172" />
 
-<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/2bd6a930-1eb5-40ef-8006-8196c1c12397" />
+- [VictoriaMetrics - Cardinality Explorer](https://play-grafana.victoriametrics.com/d/mktd5h8/victoriametrics-cardinality-explorer) — cardinality analysis: global estimates, per-group-key series counts, and top-10 highest-cardinality label value combinations.
+<img width="1510" height="796" alt="Screenshot 2026-06-29 at 19 05 47" src="https://github.com/user-attachments/assets/a1aea6e1-8714-4d5a-a629-8bdee978f1c6" />
 
 ## How to build from sources
 
