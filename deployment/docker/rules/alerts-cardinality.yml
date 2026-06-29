@@ -1,18 +1,35 @@
-# File contains default list of alerts for vmestimator service.
-# The alerts below are just recommendations and may require some updates
-# and threshold calibration according to every specific setup.
+# Default alerts for vmestimator. These are recommendations and may require
+# threshold calibration for your specific setup. They are based on the example
+# configuration at https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml
 groups:
   - name: 'cardinality'
     rules:
-      - alert: 'JobCardinalityThresholdExceeded'
-        expr: 'max without(instance) (cardinality_estimate{group_by_keys="job"}) > 20000'
+      - alert: 'JobTooHighCardinality'
+        expr: 'max (cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance) > 20000'
         for: '15m'
         labels:
           severity: 'warning'
         annotations:
           dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys=job&var-interval={{ $labels.interval }}"
-          summary: "High cardinality for job {{ $labels.by_job }}"
-          description: "Job {{ $labels.by_job }} has {{ $value }} cardinality over the last {{ $labels.interval }}, exceeding the 20000 series threshold."
+          summary: "High cardinality for job {{ $labels.group_by_values }}"
+          description: "Job {{ $labels.group_by_values }} has {{ $value }} estimated series over the last {{ $labels.interval }}, exceeding the 20000 series threshold."
+
+      - alert: 'JobTooHighChurnRate'
+        expr: |
+          (
+              max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
+              -
+              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
+          )
+          /
+          max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance) * 100 > 10
+        for: '15m'
+        labels:
+          severity: 'warning'
+        annotations:
+          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s"
+          summary: "High churn rate for job {{ $labels.group_by_values }}"
+          description: 'Job {{ $labels.group_by_values }} has {{ printf "%.0f%%" $value }} of series churned between the 15m and 30m cardinality windows, exceeding the 10% threshold.'
 
       - alert: 'CardinalityGroupLimitNearlyReached'
         expr: |
@@ -26,13 +43,11 @@ groups:
         labels:
           severity: 'warning'
         annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys{{ $labels.group_by_keys }}=job&var-interval={{ $labels.interval }}"
+          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys={{ $labels.group_by_keys }}&var-interval={{ $labels.interval }}"
           summary: "Cardinality estimate group limit nearly reached for {{ $labels.group_by_keys }}"
           description: >
             The number of tracked groups for group_by_keys={{ $labels.group_by_keys }}
-            has reached {{ printf "%.0f%%" $value }} of the configured
-            group_limit.
-            
+            has reached {{ printf "%.0f%%" $value }} of the configured group_limit. 
             New groups may soon be rejected.
             
             Consider investigating the source of the cardinality growth and either
@@ -44,7 +59,7 @@ groups:
         labels:
           severity: 'critical'
         annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys{{ $labels.group_by_keys }}=job&var-interval={{ $labels.interval }}"
+          dashboard: "{{ $externalURL }}/d/mktd5h8?var-group_by_keys={{ $labels.group_by_keys }}&var-interval={{ $labels.interval }}"
           summary: "Group limit reached for {{ $labels.group_by_keys }}"
           description: >
             {{ printf "%.0f" $value }} groups for group_by_keys={{ $labels.group_by_keys }}
