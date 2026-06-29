@@ -257,6 +257,40 @@ Values in between indicate the fraction of maximum possible churn that is occurr
 
 This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
 
+### Alerting
+
+Pre-built alert rules for cardinality monitoring are available in
+[deployment/docker/rules/alerts-cardinality.yml](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/use -cardinality.yml).
+
+They require two streams with the same `group_by` but different intervals to also support churn detection:
+```yaml
+# streams.yaml
+# or use example config:
+# https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml
+
+- interval: '15m'
+  group_by: ['job']
+
+- interval: '30m'
+  group_by: ['job']
+```
+
+The included alerts are:
+
+- **JobTooHighCardinality** — fires when any job exceeds 20,000 estimated active series over the last 30 minutes.
+  The threshold is a starting point and should be calibrated to reflect the expected cardinality of your largest jobs.
+
+- **JobTooHighChurnRate** — fires when more than 10% of a job's series churned between the 15m and 30m windows.
+  Catches jobs that generate continuous indexing pressure even when their active series count looks moderate.
+
+- **CardinalityGroupLimitNearlyReached** — fires when the number of tracked groups exceeds 80% of the configured `group_limit`.
+  Acts as an early warning that some label value combinations may soon be dropped from individual tracking.
+
+- **CardinalityGroupLimitReached** — fires when groups are actively rejected because `group_limit` is full.
+  At this point, some label combinations are being counted in a shared "rejected" sketch rather than tracked individually.
+
+All alerts link to the [Cardinality Explorer dashboard](https://play-grafana.victoriametrics.com/d/mktd5h8/).
+
 ## Alternative solutions
 
 ### PromQL
