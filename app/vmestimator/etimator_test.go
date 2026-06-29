@@ -61,8 +61,9 @@ func TestGlobalEstimate(t *testing.T) {
 			if eb.groups != nil {
 				t.Fatalf("expected bucket %d groups length to be 0 but got %d", i, len(eb.groups))
 			}
-			if eb.groupSize.Load() != 0 {
-				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, eb.groupSize.Load())
+			size := eb.groupSize.totalSize()
+			if size != 0 {
+				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, size)
 			}
 		}
 
@@ -86,7 +87,9 @@ func TestGlobalEstimate(t *testing.T) {
 	genRotateOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f(genRotateOnce(0), `cardinality_estimate{interval="10m0s",group_by_keys="__global__"} 0`)
@@ -103,7 +106,9 @@ func TestGlobalEstimate(t *testing.T) {
 	genInsertRotateInsertSameOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality/2, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(cardinality/2, "")(e)
 		}
 	}
@@ -121,7 +126,9 @@ func TestGlobalEstimate(t *testing.T) {
 	genInsertRotateInsertOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality/2, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(cardinality/2, "two")(e)
 		}
 	}
@@ -139,8 +146,12 @@ func TestGlobalEstimate(t *testing.T) {
 	genRotateTwoTimes := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality, "")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f(genRotateTwoTimes(0), `cardinality_estimate{interval="10m0s",group_by_keys="__global__"} 0`)
@@ -307,7 +318,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardRotate := func(fooCard, barCard, bazCard int, seed string) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(fooCard, barCard, bazCard, seed)(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo"}, genCardRotate(1, 10, 10, ""), `
@@ -325,7 +338,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardRotateInsertSame := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(1, barCard, bazCard, "")(e)
 		}
 	}
@@ -344,7 +359,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardRotateInsertDiff := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(1, barCard, bazCard, "two")(e)
 		}
 	}
@@ -365,8 +382,12 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardRotateTwice := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "one")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo"}, genCardRotateTwice(10, 10), `
@@ -403,7 +424,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardTwoLabelsRotate := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotate(), `
@@ -419,7 +442,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardTwoLabelsRotateInsertSame := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(2, 2, 1000, "")(e)
 		}
 	}
@@ -436,7 +461,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardTwoLabelsRotateInsertDiff := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(2, 2, 1000, "two")(e)
 		}
 	}
@@ -458,8 +485,12 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	genCardTwoLabelsRotateTwice := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "one")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotateTwice(), `
@@ -535,10 +566,7 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 		e.writeMetrics(buf)
 		assertMetricsSame(t, "", expMetrics, buf.String())
 
-		var actRejected int
-		if e.buckets[0].groupRejectedSketch != nil {
-			actRejected = int(e.buckets[0].groupRejectedSketch.Estimate())
-		}
+		actRejected := int(e.groupSize.totalRejected())
 		if expRejected != actRejected {
 			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
 		}
@@ -578,7 +606,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	f(2, func(e *estimator) {
 		// fills limit
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
+		for i := range e.buckets {
+			e.buckets[i].rotate()
+		}
 		// "a" bypasses, "c" rejected
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
 	}, 1, `
@@ -592,7 +622,9 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 	f(3, func(e *estimator) {
 		// 2 groups, limit=3
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
+		for i := range e.buckets {
+			e.buckets[i].rotate()
+		}
 		// "a" bypasses, "c" accepted (2+1=3 <= 3)
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
 	}, 0, `

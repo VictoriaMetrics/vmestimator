@@ -233,7 +233,9 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			insertSeriesIntoEstimator(e, 1_000, 0)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	})
 
@@ -248,7 +250,9 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			insertSeriesIntoEstimator(e, 30_000, 0)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	})
 }

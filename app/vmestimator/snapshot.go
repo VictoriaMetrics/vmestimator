@@ -50,12 +50,12 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 }
 
 type snapshot struct {
-	MetricPrefix        string
-	Interval            time.Duration
-	GroupByKeysLabel    string
-	GroupRejectedSketch *hyperloglog.Sketch
-	GroupBy             []string
-	GroupLimit          int64
+	MetricPrefix     string
+	Interval         time.Duration
+	GroupByKeysLabel string
+	RejectSize       int64
+	GroupBy          []string
+	GroupLimit       int64
 	// prom string metric => hll
 	Sketches map[string]*hyperloglog.Sketch
 }
@@ -101,13 +101,7 @@ func (s *snapshot) merge(other *snapshot) {
 	s.GroupLimit = other.GroupLimit
 	s.GroupByKeysLabel = other.GroupByKeysLabel
 	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
-	if other.GroupRejectedSketch != nil {
-		if s.GroupRejectedSketch == nil {
-			s.GroupRejectedSketch = other.GroupRejectedSketch.Clone()
-		} else {
-			s.GroupRejectedSketch.Merge(other.GroupRejectedSketch)
-		}
-	}
+	s.RejectSize += other.RejectSize
 }
 
 // writeMetrics writes metrics to w.
@@ -126,10 +120,7 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 	}
 
 	if len(s.GroupBy) > 0 {
-		groupSize := int64(len(s.Sketches))
-		if s.GroupRejectedSketch != nil {
-			groupSize += int64(s.GroupRejectedSketch.Estimate())
-		}
+		groupSize := int64(len(s.Sketches)) + s.RejectSize
 
 		formatBuf := make([]byte, 0, 1024)
 		formatBuf = appendGroupMetric(formatBuf, s.MetricPrefix, s.GroupByKeysLabel)
@@ -154,7 +145,7 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 func (s *snapshot) reset() {
 	s.GroupLimit = 0
 	s.GroupByKeysLabel = ""
-	s.GroupRejectedSketch = nil
+	s.RejectSize = 0
 	s.MetricPrefix = ""
 	s.Interval = 0
 	s.GroupBy = s.GroupBy[:0]
@@ -203,11 +194,6 @@ func convertGroupToSnapshot(e *estimator, s *snapshot) *snapshot {
 	s.reset()
 
 	for _, eb := range e.buckets {
-		eb.groupRejectedMu.Lock()
-		if eb.groupRejectedSketch != nil {
-			s.GroupRejectedSketch = eb.groupRejectedSketch.Clone()
-		}
-		eb.groupRejectedMu.Unlock()
 		s = convertGroupBucketToSnapshot(eb, s, formatBuf)
 	}
 	return s
@@ -244,11 +230,17 @@ func convertGroupBucketToSnapshot(eb *estimatorBucket, s *snapshot, formatBuf []
 		s.Sketches[string(formatBuf)] = resSK.Clone()
 	}
 
-	s.GroupLimit = eb.groupLimit
+	s.GroupLimit = eb.groupSize.limit
 	s.GroupByKeysLabel = eb.groupByKeysLabel
 	s.MetricPrefix = eb.metricPrefix
 	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)
 	s.Interval = eb.interval
+
+	eb.groupSize.rejectMu.Lock()
+	if sk := eb.groupSize.rejectSketches[eb.idx]; sk != nil {
+		s.RejectSize += int64(sk.Estimate())
+	}
+	eb.groupSize.rejectMu.Unlock()
 
 	return s
 }

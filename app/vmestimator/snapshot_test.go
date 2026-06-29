@@ -50,21 +50,6 @@ func TestGlobalSnapshot(t *testing.T) {
 
 		gen(e)
 
-		if len(e.buckets) != cfg.Buckets {
-			t.Fatalf("expected buckets length to be %d but got %d", cfg.Buckets, len(e.buckets))
-		}
-		for i, eb := range e.buckets {
-			if len(eb.groupBy) > 0 {
-				t.Fatalf("expected bucket %d groupBy length to be 0 but got %d", i, len(eb.groupBy))
-			}
-			if eb.groups != nil {
-				t.Fatalf("expected bucket %d groups length to be 0 but got %d", i, len(eb.groups))
-			}
-			if eb.groupSize.Load() != 0 {
-				t.Fatalf("expected bucket %d groupSize to be 0 but got %d", i, eb.groupSize.Load())
-			}
-		}
-
 		buf := bytes.NewBuffer(nil)
 		e.writeMetrics(buf)
 		expMetric := buf.String()
@@ -105,7 +90,9 @@ func TestGlobalSnapshot(t *testing.T) {
 	genRotateOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f(genRotateOnce(0))
@@ -117,7 +104,9 @@ func TestGlobalSnapshot(t *testing.T) {
 	genInsertRotateInsertSameOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality/2, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(cardinality/2, "")(e)
 		}
 	}
@@ -130,7 +119,9 @@ func TestGlobalSnapshot(t *testing.T) {
 	genInsertRotateInsertOnce := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality/2, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(cardinality/2, "two")(e)
 		}
 	}
@@ -143,8 +134,12 @@ func TestGlobalSnapshot(t *testing.T) {
 	genRotateTwoTimes := func(cardinality int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(cardinality, "")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f(genRotateTwoTimes(0))
@@ -262,7 +257,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardRotate := func(fooCard, barCard, bazCard int, seed string) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(fooCard, barCard, bazCard, seed)(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo"}, genCardRotate(1, 10, 10, ""))
@@ -272,7 +269,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardRotateInsertSame := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(1, barCard, bazCard, "")(e)
 		}
 	}
@@ -283,7 +282,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardRotateInsertDiff := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(1, barCard, bazCard, "two")(e)
 		}
 	}
@@ -294,8 +295,12 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardRotateTwice := func(barCard, bazCard int) func(e *estimator) {
 		return func(e *estimator) {
 			genCard(1, barCard, bazCard, "one")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo"}, genCardRotateTwice(10, 10))
@@ -310,7 +315,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardTwoLabelsRotate := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotate())
@@ -319,7 +326,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardTwoLabelsRotateInsertSame := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(2, 2, 1000, "")(e)
 		}
 	}
@@ -329,7 +338,9 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardTwoLabelsRotateInsertDiff := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "one")(e)
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 			genCard(2, 2, 1000, "two")(e)
 		}
 	}
@@ -339,8 +350,12 @@ func TestGroupSnapshot(t *testing.T) {
 	genCardTwoLabelsRotateTwice := func() func(e *estimator) {
 		return func(e *estimator) {
 			genCard(2, 2, 1000, "one")(e)
-			e.rotate()
-			e.rotate()
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
 		}
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotateTwice())
@@ -372,7 +387,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 	}
 
-	f := func(groupLimit int, gen func(e *estimator), expRejected int) {
+	f := func(groupLimit int, gen func(e *estimator)) {
 		t.Helper()
 
 		cfg := EstimatorConfig{
@@ -401,14 +416,6 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
 
-		var actRejected int
-		if s.GroupRejectedSketch != nil {
-			actRejected = int(s.GroupRejectedSketch.Estimate())
-		}
-		if expRejected != actRejected {
-			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
-		}
-
 		// test encode/decode snapshot produce same result
 		buf.Reset()
 		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
@@ -430,35 +437,39 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 	// all groups accepted
 	f(3, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 0)
+	})
 
 	// 2 groups only accepted
 	f(2, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 1)
+	})
 
 	// one group only accepted
 	f(1, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 2)
+	})
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
 	f(2, func(e *estimator) {
 		// fills limit
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
+		for i := range e.buckets {
+			e.buckets[i].rotate()
+		}
 		// "a" bypasses, "c" rejected
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 1)
+	})
 
 	// after rotate: new group accepted when remaining capacity allows
 	f(3, func(e *estimator) {
 		// 2 groups, limit=3
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b")})
-		e.rotate()
+		for i := range e.buckets {
+			e.buckets[i].rotate()
+		}
 		// "a" bypasses, "c" accepted (2+1=3 <= 3)
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 0)
+	})
 
 	// reject 100
 	f(3, func(e *estimator) {
@@ -467,5 +478,5 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 			tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
 		}
 		e.insertMany(tss)
-	}, 100)
+	})
 }

@@ -42,7 +42,7 @@ github.com/VictoriaMetrics/metrics
 ## explicit; go 1.24.2
 github.com/VictoriaMetrics/metricsql
 github.com/VictoriaMetrics/metricsql/binaryop
-# github.com/axiomhq/hyperloglog v0.0.10-reuse-memory => github.com/makasim/hyperloglog v0.0.10-reuse-memory
+# github.com/axiomhq/hyperloglog v0.0.10-reuse-memory => github.com/makasim/hyperloglog v0.0.12-reuse-memory
 ## explicit; go 1.23
 github.com/axiomhq/hyperloglog
 # github.com/cespare/xxhash/v2 v2.3.0
@@ -102,4 +102,4 @@ golang.org/x/sys/windows
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2
-# github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.10-reuse-memory
+# github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.12-reuse-memory
