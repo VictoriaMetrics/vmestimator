@@ -18,6 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
+  "id": 0,
   "links": [],
   "panels": [
     {
@@ -26,12 +27,78 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 3
+        "y": 0
       },
       "id": 20,
       "panels": [],
       "title": "Stats",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "description": "Shows the rate of ingested [samples](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#raw-samples)",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.2.10",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(vm_protoparser_rows_read_total{job=~\"$job\",instance=~\"$instance\",type=\"promremotewrite\"}[$__rate_interval])) by(job, type) > 0",
+          "interval": "",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Samples ingested/s",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -62,7 +129,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 1
       },
       "id": 22,
       "maxDataPoints": 100,
@@ -84,7 +151,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -110,7 +177,7 @@
         "type": "prometheus",
         "uid": "$ds"
       },
-      "description": "Shows the rate of ingested [samples](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#raw-samples)",
+      "description": "Shows number of generated  error messages in  logs over last 30m. Non-zero value may be a sign of connectivity or misconfiguration errors.",
       "fieldConfig": {
         "defaults": {
           "mappings": [],
@@ -121,10 +188,14 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -134,7 +205,14 @@
         "x": 0,
         "y": 4
       },
-      "id": 24,
+      "id": 23,
+      "links": [
+        {
+          "targetBlank": true,
+          "title": "Troubleshooting",
+          "url": "https://docs.victoriametrics.com/victoriametrics/vmagent/#troubleshooting"
+        }
+      ],
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -153,22 +231,20 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "$ds"
           },
-          "editorMode": "code",
-          "expr": "sum(rate(vm_protoparser_rows_read_total{job=~\"$job\",instance=~\"$instance\",type=\"promremotewrite\"}[$__rate_interval])) by(job, type) > 0",
+          "expr": "sum(increase(vm_log_messages_total{job=~\"$job\", instance=~\"$instance\", level!=\"info\"}[30m]))",
           "interval": "",
-          "legendFormat": "__auto",
-          "range": true,
+          "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Samples ingested/s",
+      "title": "Log messages (30m)",
       "type": "stat"
     },
     {
@@ -222,7 +298,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -248,11 +324,23 @@
         "type": "prometheus",
         "uid": "$ds"
       },
-      "description": "Shows number of generated  error messages in  logs over last 30m. Non-zero value may be a sign of connectivity or misconfiguration errors.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false,
+            "minWidth": 50
+          },
           "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -262,61 +350,79 @@
               },
               {
                 "color": "red",
-                "value": 1
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
               }
             ]
           },
-          "unit": "short"
-        },
-        "overrides": []
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "version"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 313
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 3,
-        "w": 6,
+        "h": 7,
+        "w": 12,
         "x": 0,
         "y": 7
       },
-      "id": 23,
-      "links": [
-        {
-          "targetBlank": true,
-          "title": "Troubleshooting",
-          "url": "https://docs.victoriametrics.com/victoriametrics/vmagent/#troubleshooting"
-        }
-      ],
+      "id": 25,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "auto",
-        "wideLayout": true
+        "cellHeight": "sm",
+        "showHeader": true
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "$ds"
           },
-          "expr": "sum(increase(vm_log_messages_total{job=~\"$job\", instance=~\"$instance\", level!=\"info\"}[30m]))",
-          "interval": "",
-          "legendFormat": "",
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by(job, version) (label_replace(vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version!=\"\"}, \"version\", \"$1\", \"short_version\", \"(.*)\") or vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version=\"\"})",
+          "format": "table",
+          "instant": true,
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Log messages (30m)",
-      "type": "stat"
+      "title": "",
+      "type": "table"
     },
     {
       "datasource": {
@@ -407,7 +513,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -427,117 +533,12 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$ds"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "footer": {
-              "reducers": []
-            },
-            "inspect": false,
-            "minWidth": 50
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom.viz",
-                "value": true
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Value"
-            },
-            "properties": [
-              {
-                "id": "displayName",
-                "value": "Count"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "version"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 313
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 10
-      },
-      "id": 25,
-      "options": {
-        "cellHeight": "sm",
-        "showHeader": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$ds"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum by(job, version) (label_replace(vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version!=\"\"}, \"version\", \"$1\", \"short_version\", \"(.*)\") or vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version=\"\"})",
-          "format": "table",
-          "instant": true,
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "",
-      "type": "table"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 14
       },
       "id": 11,
       "panels": [],
@@ -618,7 +619,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 15
       },
       "id": 1,
       "options": {
@@ -640,7 +641,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -730,7 +731,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 15
       },
       "id": 5,
       "options": {
@@ -750,7 +751,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -857,7 +858,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 23
       },
       "id": 2,
       "options": {
@@ -879,7 +880,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -966,7 +967,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 23
       },
       "id": 6,
       "options": {
@@ -986,7 +987,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -1073,7 +1074,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 31
       },
       "id": 3,
       "options": {
@@ -1093,7 +1094,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.4.3",
+      "pluginVersion": "12.2.10",
       "targets": [
         {
           "datasource": {
@@ -1180,7 +1181,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 39
       },
       "id": 4,
       "options": {
@@ -1287,7 +1288,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 47
       },
       "id": 15,
       "options": {
@@ -1332,7 +1333,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 55
       },
       "id": 12,
       "panels": [],
@@ -1407,7 +1408,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 56
       },
       "id": 16,
       "options": {
@@ -1514,7 +1515,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 56
       },
       "id": 17,
       "options": {
@@ -1619,7 +1620,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 64
       },
       "id": 7,
       "options": {
@@ -1717,7 +1718,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 64
       },
       "id": 8,
       "options": {
@@ -1816,7 +1817,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 72
       },
       "id": 28,
       "options": {
@@ -1884,7 +1885,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 80
       },
       "id": 14,
       "panels": [],
@@ -1965,7 +1966,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 81
       },
       "id": 9,
       "options": {
@@ -2079,7 +2080,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 81
       },
       "id": 10,
       "options": {
@@ -2192,7 +2193,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 89
       },
       "id": 18,
       "options": {
@@ -2298,7 +2299,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 89
       },
       "id": 19,
       "options": {
@@ -2413,7 +2414,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 97
       },
       "id": 27,
       "options": {
@@ -2466,8 +2467,8 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": "sandbox-monitoring",
-          "value": "PB894574A363DF0AF"
+          "text": "prometheus",
+          "value": "P1809F7CD0C75ACF3"
         },
         "name": "ds",
         "options": [],
@@ -2501,15 +2502,12 @@
         },
         "refresh": 2,
         "regex": "",
-        "regexApplyTo": "value",
         "type": "query"
       },
       {
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -2531,7 +2529,6 @@
         },
         "refresh": 2,
         "regex": "",
-        "regexApplyTo": "value",
         "type": "query"
       }
     ]
@@ -2544,6 +2541,5 @@
   "timezone": "utc",
   "title": "VictoriaMetrics - vmestimator",
   "uid": "mkv22l4",
-  "version": 3,
-  "weekStart": ""
+  "version": 2
 }
