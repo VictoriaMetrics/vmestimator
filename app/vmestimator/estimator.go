@@ -42,7 +42,8 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		cfg.GroupLimit = 10000
 	}
 	if cfg.Buckets <= 0 {
-		cfg.Buckets = min(64, 2*cgroup.AvailableCPUs())
+		buckets := min(64, 2*cgroup.AvailableCPUs())
+		cfg.Buckets = max(4, buckets)
 	}
 	if cfg.HLLPrecision == 0 {
 		cfg.HLLPrecision = 14
