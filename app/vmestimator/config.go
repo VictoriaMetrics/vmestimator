@@ -29,7 +29,7 @@ func loadConfig(path string) ([]*estimator, error) {
 		return nil, nil
 	}
 	if path == "" {
-		return nil, fmt.Errorf("either -config or -storageNode must be specified; see https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml for config example")
+		return nil, fmt.Errorf("either -config or -storageNode must be specified; see https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example")
 	}
 
 	data, err := os.ReadFile(path)
