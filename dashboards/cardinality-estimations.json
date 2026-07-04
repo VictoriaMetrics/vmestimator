@@ -866,7 +866,7 @@
   },
   "timepicker": {},
   "timezone": "utc",
-  "title": "[DEPRECATED] VictoriaMetrics - Cardinality Explorer",
-  "uid": "mktd5h8",
+  "title": "VictoriaMetrics - Cardinality Estimations",
+  "uid": "mktd5g9",
   "version": 3
 }

@@ -1,6 +1,6 @@
 `vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
 
-## Why measure?
+## Why measure ?
 
 Consider a setup where metrics are scraped from dozens of Prometheus targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
@@ -59,7 +59,7 @@ The resulting topology looks like this:
 
 ## Install
 
-Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml).
+Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml).
 Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
 ```bash
 docker run --rm \
@@ -76,7 +76,7 @@ To build from sources, see [How to build from sources](https://github.com/Victor
 
 ## Configuration
 
-To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml)):
+To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml):
 
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
@@ -137,7 +137,7 @@ streams:
     # Whether to use the sparse HyperLogLog representation for low-cardinality groups.
     # Sparse mode uses far less memory until a group's cardinality reaches ~2^(p-1),
     # at which point it automatically promotes to the dense representation.
-    # See more in https://research.google.com/pubs/archive/40671.pdf
+    # See more in # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: true
     hll_sparse: 'boolean'
@@ -376,7 +376,7 @@ Two Grafana dashboards are available in the [dashboards](https://github.com/Vict
 - [VictoriaMetrics - vmestimator](https://play-grafana.victoriametrics.com/d/mkv22l4/victoriametrics-vmestimator) — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
 <img width="1507" height="801" alt="Screenshot 2026-06-29 at 19 06 46" src="https://github.com/user-attachments/assets/cbfd979d-f403-4270-b098-2d2f0b392172" />
 
-- [VictoriaMetrics - Cardinality Explorer](https://play-grafana.victoriametrics.com/d/mktd5h8/victoriametrics-cardinality-explorer) — cardinality analysis: global estimates, per-group-key series counts, and top-10 highest-cardinality label value combinations.
+- [VictoriaMetrics - Cardinality Estimations](https://play-grafana.victoriametrics.com/d/mktd5g9/victoriametrics-cardinality-estimations) — cardinality estimations: shows estimations, churn over configured label dimensions.
 <img width="1510" height="796" alt="Screenshot 2026-06-29 at 19 05 47" src="https://github.com/user-attachments/assets/a1aea6e1-8714-4d5a-a629-8bdee978f1c6" />
 
 ## How to build from sources
@@ -403,17 +403,17 @@ The base docker image is [alpine](https://hub.docker.com/_/alpine) but it is pos
 For example, the following command builds the image on top of [scratch](https://hub.docker.com/_/scratch) image:
 
 ```sh
-ROOT_IMAGE=scratch make package-vmestimator
+ROOT_IMAGE=scratch make package-vmrestore
 ```
 
 You can build and publish to your own registry and namespace:
 ```
-DOCKER_REGISTRIES=ghcr.io DOCKER_NAMESPACE=foo make publish-vmestimator
+DOCKER_REGISTRIES=ghcr.io DOCKER_NAMESPACE=foo make publish-vmagent
 ```
 
 ## Command-line flags
 
-Run `vmestimator -help` in order to see all the available options:
+Run `vmestimate -help` in order to see all the available options:
 
 ```
 Usage of ./bin/vmestimator:
@@ -422,7 +422,7 @@ Usage of ./bin/vmestimator:
   -cardinalityMetrics.exposeAt string
         HTTP path for exposing cardinality metrics. If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. If set to a different path, only cardinality metrics are exposed at that endpoint. If set to an empty value, cardinality metrics are not exposed via HTTP at all. (default "/metrics")
   -config string
-        Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example
+        Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml for config example
   -enableTCP6
         Whether to enable IPv6 for listening and dialing. By default, only IPv4 TCP and UDP are used
   -envflag.enable
