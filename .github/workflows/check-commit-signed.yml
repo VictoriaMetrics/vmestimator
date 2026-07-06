@@ -1,0 +1,52 @@
+name: check-commit-signed
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  check-commit-signed:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0  # we need full history for commit verification
+          persist-credentials: false
+
+      - name: Check commit signatures
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Not a PR event, skipping signature check"
+            exit 0
+          fi
+          
+          RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          echo "Checking commits in PR range: $RANGE"
+          
+          if [ -z "$(git rev-list $RANGE)" ]; then
+            echo "No new commits in this PR, skipping signature check"
+            exit 0
+          fi
+          
+          # Check raw commit objects for a "gpgsig" header as a fast early signal for
+          # contributors. Both GPG and SSH signatures use this header. 
+          # This avoids relying on %G? which returns N for SSH commits.
+          # This check is not a security enforcement — unsigned commits cannot be merged
+          # anyway due to the GitHub repository merge policy.
+          unsigned=""
+          for sha in $(git rev-list $RANGE); do
+            if ! git cat-file commit "$sha" | grep -q "^gpgsig"; then
+              unsigned="$unsigned $sha"
+            fi
+          done
+          if [ -n "$unsigned" ]; then
+            echo "Found unsigned commits:"
+            echo "$unsigned"
+            exit 1
+          fi
+
+          echo "All commits in PR are signed (GPG or SSH)"

@@ -23,6 +23,7 @@ GOLANGCI_LINT_VERSION := 2.12.2
 
 include app/*/Makefile
 include deployment/*/Makefile
+include docs/Makefile
 
 all: \
 	vmestimator-prod
