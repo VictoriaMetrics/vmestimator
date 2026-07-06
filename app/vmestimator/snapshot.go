@@ -90,7 +90,7 @@ func (s *snapshot) merge(other *snapshot) {
 
 	for name, otherSK := range other.Sketches {
 		if existing, ok := s.Sketches[name]; ok {
-			existing.Merge(otherSK)
+			_ = existing.Merge(otherSK)
 		} else {
 			s.Sketches[name] = otherSK.Clone()
 		}
