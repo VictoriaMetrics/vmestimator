@@ -34,7 +34,7 @@ the ingested metrics according to the given [configuration](https://github.com/V
 and exposes [cardinality metrics](https://github.com/VictoriaMetrics/vmestimator/tree/main#cardinality-metrics)
 in Prometheus exposition format on `/metrics` endpoint, so they can be scraped by any Prometheus-compatible collector.
 
-<img style="min-width:0;width:50%;" src="design-1.webp" />
+<img style="min-width:0;width: 100%" src="design-1.webp" />
 
 `vmestimator` is heavily optimized for high-throughput processing. It approximately requires 1 CPU core for ingesting
 around 800K metric samples/s and around 150MiB of memory per each [stream](https://github.com/VictoriaMetrics/vmestimator#configuration)
