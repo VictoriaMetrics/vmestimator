@@ -18,6 +18,15 @@ Instead of discovering the problem after it impacts the infrastructure, it becom
 `vmestimator` can measure cardinality across arbitrary label dimensions, enabling use cases such as per-tenant usage analysis,
 long-term trend tracking, and capacity planning. See more [use cases](https://github.com/VictoriaMetrics/vmestimator/#use-cases).
 
+## Key features
+
+* real-time in-flight cardinality tracking without impacting the metrics source or storage
+* no vendor-lock: works with any Prometheus-compatible database or agent
+* [configurable measurement windows, labels grouping](https://github.com/VictoriaMetrics/vmestimator#configuration)
+* low resource usage: can handle millions of samples/s and hundreds of millions unique time series on a single machine
+* [horizontally scalable](https://github.com/VictoriaMetrics/vmestimator#cluster)
+* goes with default [alerting rules](https://github.com/VictoriaMetrics/vmestimator#alerting) and [Grafana dashboards](https://github.com/VictoriaMetrics/vmestimator#dashboards)
+
 ## Design
 
 `vmestimator` accepts traffic for analysis via Prometheus remote write v1 protocol. It then computes the cardinality of
@@ -56,6 +65,9 @@ The next step is to expose cardinality estimates as metrics.
 For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
 <img style="min-width:0;width: 100%" src="imgs/design-2.png" />
+
+> In this way, `vmestimator` is just an alternative pipeline for ingesting metrics and collecting computed cardinality estimates.
+Overloading vmestimator won't have any impact on the rest of the Observability pipeline.
 
 This setup is straightforward and introduces minimal overhead. 
 The main drawback is that cardinality data shares the same storage with production metrics. 
