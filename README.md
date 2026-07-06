@@ -37,8 +37,9 @@ in Prometheus exposition format on `/metrics` endpoint, so they can be scraped b
 <img style="min-width:0;width:50%;" src="imgs/design-1.png" />
 
 `vmestimator` is heavily optimized for high-throughput processing. It approximately requires 1 CPU core for ingesting
-around 800K metric samples/s and around 200MiB of memory for tracking 3Mil unique time series. It is expected for one vmestimator
-instance to easily handle traffic for millions of samples/s and hundreds of millions unique time series. It is also possible
+around 800K metric samples/s and around 150MiB of memory per each [stream](https://github.com/VictoriaMetrics/vmestimator#configuration) 
+(tracking 3Mil unique time series via 2 streams is using 200MiB on the testing stand).
+It is expected for one vmestimator instance to easily handle traffic for millions of samples/s and hundreds of millions unique time series. It is also possible
 to [scale vmestimator horizontally](https://github.com/VictoriaMetrics/vmestimator/tree/main#cluster).
 
 We recommend deploying `vmestimator` close to the metrics source, ideally alongside `vmagent` instances that scrape or forward metrics. 
