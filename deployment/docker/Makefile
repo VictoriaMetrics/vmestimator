@@ -231,24 +231,3 @@ package-via-docker-386:
 
 remove-docker-images:
 	docker image ls --format '{{.ID}}' | xargs docker image rm -f
-
-# VM single
-docker-vm-single-up:
-	$(DOCKER_COMPOSE) -f deployment/docker/compose-vm-single.yml up -d
-
-docker-vm-single-down:
-	$(DOCKER_COMPOSE) -f deployment/docker/compose-vm-single.yml down -v
-
-# VM cluster
-docker-vm-cluster-up:
-	$(DOCKER_COMPOSE) -f deployment/docker/compose-vm-cluster.yml up -d
-
-docker-vm-cluster-down:
-	$(DOCKER_COMPOSE) -f deployment/docker/compose-vm-cluster.yml down -v
-
-# Command aliases to keep backward-compatibility, as they could have been mentioned on the Internet before the rename.
-docker-single-up: docker-vm-single-up
-docker-single-down: docker-vm-single-down
-
-docker-cluster-up: docker-vm-cluster-up
-docker-cluster-down: docker-vm-cluster-down

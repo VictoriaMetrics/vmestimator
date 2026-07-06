@@ -22,12 +22,7 @@ GOLANGCI_LINT_VERSION := 2.12.2
 .PHONY: $(MAKECMDGOALS)
 
 include app/*/Makefile
-#include codespell/Makefile
-#include docs/Makefile
 include deployment/*/Makefile
-#include dashboards/Makefile
-#include package/release/Makefile
-#include benchmarks/Makefile
 
 all: \
 	vmestimator-prod

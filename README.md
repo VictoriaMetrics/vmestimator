@@ -1,32 +1,41 @@
-`vmestimator` measures metrics cardinality across arbitrary label dimensions and exposes the results as metrics.
+`vmestimator` measures metrics cardinality across arbitrary label dimensions in real time and exposes the results as metrics.
 
-## Why measure ?
+## Why measure?
 
-Consider a setup where metrics are scraped from dozens of Prometheus targets.
+Consider a setup where metrics are pushed or scraped from hundreds of targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label. 
 Overnight, that job's cardinality explodes from 500 to 500,000 time series.
-Suddenly, VictoriaMetrics consumes 100x more memory and disk. 
+Suddenly, Time Series DB that stores these metrics starts consuming 100x more memory and disk. 
 Ingestion slows down, storage struggles to keep up, and in the worst case becomes unavailable. 
 
-By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability across the entire system is affected.
+By the time someone gets paged, the damage is already done: indexes are bloated, caches are oversized, and observability
+across the entire system is affected.
 
-`vmestimator` continuously tracks cardinality and exposes the estimation results as [metrics](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#cardinality-metrics).
-This allows alerting on cardinality spikes within minutes and identifying the offending job directly from the alert.
+`vmestimator` continuously tracks cardinality in real time and exposes the estimation results as [metrics](https://github.com/VictoriaMetrics/vmestimator/blob/main/README.md#cardinality-metrics).
+This allows alerting on cardinality spikes within minutes and identifying the offending label directly from the alert.
 Instead of discovering the problem after it impacts the infrastructure, it becomes possible to react before it turns into an outage.
 
-Per-job cardinality tracking is the most actionable use case, but it’s not the only one (see [use cases](https://github.com/VictoriaMetrics/vmestimator/#use-cases)).
-`vmestimator` can measure cardinality across arbitrary label dimensions, 
-enabling use cases such as per-tenant usage analysis, long-term trend tracking, and capacity planning.
+`vmestimator` can measure cardinality across arbitrary label dimensions, enabling use cases such as per-tenant usage analysis,
+long-term trend tracking, and capacity planning. See more [use cases](https://github.com/VictoriaMetrics/vmestimator/#use-cases).
 
 ## Design
 
-We recommend deploying `vmestimator` close to the metrics source, ideally alongside `vmagent` instances that scrape targets. 
-Each `vmagent` mirrors all ingested metrics into the estimator.
+`vmestimator` accepts traffic for analysis via Prometheus remote write v1 protocol. It then computes the cardinality of
+the ingested metrics according to the given [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration)
+and exposes [cardinality metrics](https://github.com/VictoriaMetrics/vmestimator/tree/main#cardinality-metrics) 
+in Prometheus exposition format on `/metrics` endpoint, so they can be scraped by any Prometheus-compatible collector.
 
-To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path. 
-It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
+<img style="min-width:0;width:50%;" src="imgs/design-1.png" />
 
-Run vmestimator (see [configuration](https://github.com/VictoriaMetrics/vmestimator#configuration)):
+`vmestimator` is heavily optimized for high-throughput processing. It approximately requires 1 CPU core for ingesting
+around 800K metric samples/s and around 200MiB of memory for tracking 3Mil unique time series. It is expected for one vmestimator
+instance to easily handle traffic for millions of samples/s and hundreds of millions unique time series. It is also possible
+to [scale vmestimator horizontally](https://github.com/VictoriaMetrics/vmestimator/tree/main#cluster).
+
+We recommend deploying `vmestimator` close to the metrics source, ideally alongside `vmagent` instances that scrape or forward metrics. 
+Configure each `vmagent` to [replicate](https://docs.victoriametrics.com/vmagent/index.html#replication-and-high-availability) all metrics into the vmestimator.
+
+Run vmestimator:
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
 ```
@@ -34,16 +43,19 @@ Run vmestimator (see [configuration](https://github.com/VictoriaMetrics/vmestima
 Run vmagent:
 ```bash
 /path/to/vmagent \
-  -remoteWrite.url=http://127.0.0.1:8428/api/v1/write \
-  -remoteWrite.url=http://127.0.0.1:8490/cardinality/api/v1/write \
-  -remoteWrite.disableOnDiskQueue=false,true \
-  -remoteWrite.disableMetadata=false,true
+  -remoteWrite.url=http://127.0.0.1:8428/api/v1/write \ # main remote destination
+  -remoteWrite.url=http://127.0.0.1:8490/cardinality/api/v1/write \ # replicate workload to vmestimator
+  -remoteWrite.disableOnDiskQueue=false,true \ # disable queueing for vmestimator
+  -remoteWrite.disableMetadata=false,true # disable metadata for vmestimator
 ```
+
+> To reduce overhead, persistent queueing and metadata ingestion can be disabled for the estimator remote write path.
+> It is safe to send metrics from multiple independent `vmagent` instances into a single `vmestimator`.
 
 The next step is to expose cardinality estimates as metrics. 
 For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
-<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e52d9210-b6f9-457b-8d8f-1d6ff6ba1416" />
+<img style="min-width:0;width: 100%" src="imgs/design-2.png" />
 
 This setup is straightforward and introduces minimal overhead. 
 The main drawback is that cardinality data shares the same storage with production metrics. 
@@ -55,7 +67,7 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/e2ca4a69-e931-47a1-9d91-99749382d4a9" />
+<img style="min-width:0;width: 100%" src="imgs/design-3.png" />
 
 ## Install
 
@@ -94,9 +106,9 @@ streams:
     # by comparing their estimates. See Use Cases -> Churn Rate
     #
     # default: 5m
-    interval: 'golang duration'
+    interval: <duration>
 
-    # Label names used to split the cardinality estimate into per-combination groups.
+    # Optional. Label names used to split the cardinality estimate into per-combination groups.
     # Each distinct combination of values for these labels gets its own estimate metric.
     # Omit entirely for a single global estimate across all series.
     # Examples:
@@ -105,9 +117,9 @@ streams:
     #  - ["vm_account_id","vm_project_id"]
     #
     # default: none (single global estimate)
-    group_by: 'string array'
+    group_by: '[<string>, ...]'
 
-    # Maximum number of distinct groups (HLL sketches) to track.
+    # Optional. Maximum number of distinct groups (HLL sketches) to track.
     # Once the limit is reached, excess groups are counted in a single shared "rejected" sketch
     # rather than getting their own entry. Acts as a memory cap and a safeguard against OOM
     # when the group_by label values grow unboundedly.
@@ -115,16 +127,16 @@ streams:
     #   group_limit * 2^hll_precision bytes. 
     #
     # default: 10000
-    group_limit: 'integer'
+    group_limit: <integer>
 
-    # Number of shards used to reduce lock contention during parallel ingestion.
+    # Optional. Number of shards used to reduce lock contention during parallel ingestion.
     # Slightly increases memory for global streams (no group_by); negligible otherwise.
     # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
     #
     # default: min(64, 2*availableCPUs)
-    buckets: 'integer'
+    buckets:  <integer>
 
-    # HyperLogLog precision p, in range [4..18].
+    # Optional. HyperLogLog precision p, in range [4..18].
     # Determines the number of registers m = 2^p and the relative error 1.04 / sqrt(m):
     #   p=14 → m=16 384, error ~0.81%, memory ~16 KB per sketch  (default, suits most cases)
     #   p=18 → m=262 144, error ~0.20%, memory ~256 KB per sketch (billing-grade accuracy)
@@ -132,20 +144,21 @@ streams:
     # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: 14
-    hll_precision: 'integer'
+    hll_precision: <integer>
 
-    # Whether to use the sparse HyperLogLog representation for low-cardinality groups.
+    # Optional. Whether to use the sparse HyperLogLog representation for low-cardinality groups.
     # Sparse mode uses far less memory until a group's cardinality reaches ~2^(p-1),
     # at which point it automatically promotes to the dense representation.
     # See more in # See more in https://research.google.com/pubs/archive/40671.pdf
     #
     # default: true
-    hll_sparse: 'boolean'
+    hll_sparse: <bool>
 
-    # Static labels attached to every output metric produced by this stream entry.
+    # Optional. Static labels attached to every output metric produced by this stream entry.
     # Useful when multiple vmestimator instances feed the same storage and you need
     # to distinguish their estimates in dashboards and alerts.
-    labels: 'map key string: value string'
+    labels:
+      <labelname>: <labelvalue> ... 
 ```
 
 ## Cardinality Metrics
@@ -166,7 +179,7 @@ cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_value
 cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
 ```
 
-Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached 
+> Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached 
 and excess groups are counted in a single shared "rejected" sketch rather than getting their own entry.
 
 By default, cardinality estimates are merged with the estimator's operational metrics and exposed at `/metrics`.
