@@ -34,7 +34,7 @@ the ingested metrics according to the given [configuration](https://github.com/V
 and exposes [cardinality metrics](https://github.com/VictoriaMetrics/vmestimator/tree/main#cardinality-metrics)
 in Prometheus exposition format on `/metrics` endpoint, so they can be scraped by any Prometheus-compatible collector.
 
-![design-1](design-1.webp)
+![design-1](/victoriametrics/vmestimator/design-1.webp)
 
 `vmestimator` is heavily optimized for high-throughput processing. It approximately requires 1 CPU core for ingesting
 around 800K metric samples/s and around 150MiB of memory per each [stream](https://github.com/VictoriaMetrics/vmestimator#configuration)
@@ -65,7 +65,7 @@ Run vmagent:
 The next step is to expose cardinality estimates as metrics.
 For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
-![design-2](design-2.webp)
+![design-2](/victoriametrics/vmestimator/design-2.webp)
 
 > In this way, `vmestimator` is just an alternative pipeline for ingesting metrics and collecting computed cardinality estimates.
 Overloading vmestimator won't have any impact on the rest of the Observability pipeline.
@@ -80,7 +80,7 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-![design-3](design-3.webp)
+![design-3](/victoriametrics/vmestimator/design-3.webp)
 
 ## Install
 
@@ -359,7 +359,7 @@ Use the cardinality explorer when you need to drill into a specific metric or la
 
 Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate. Cardinality estimate results should be scraped from selector nodes.
 
-![cluster](cluster.webp)
+![cluster](/victoriametrics/vmestimator/cluster.webp)
 
 **Storage nodes:**
 ```
@@ -400,10 +400,10 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
 
 - [VictoriaMetrics - vmestimator](https://play-grafana.victoriametrics.com/d/mkv22l4/victoriametrics-vmestimator) — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
-  ![dashboard-vmestimator](dashboard-vmestimator.webp)
+  ![dashboard-vmestimator](/victoriametrics/vmestimator/dashboard-vmestimator.webp)
 
 - [VictoriaMetrics - Cardinality Estimations](https://play-grafana.victoriametrics.com/d/mktd5g9/victoriametrics-cardinality-estimations) — cardinality estimations: shows estimations, churn over configured label dimensions.
-  ![dashboard-cardinality](dashboard-cardinality.webp)
+  ![dashboard-cardinality](/victoriametrics/vmestimator/dashboard-cardinality.webp)
 
 ## How to build from sources
 
