@@ -24,6 +24,7 @@ GOLANGCI_LINT_VERSION := 2.12.2
 include app/*/Makefile
 include deployment/*/Makefile
 include docs/Makefile
+include package/release/Makefile
 
 all: \
 	vmestimator-prod
@@ -126,6 +127,9 @@ release-vmestimator-windows-goarch: vmestimator-windows-$(GOARCH)-prod
 	cd bin && rm -rf \
 		vmestimator-windows-$(GOARCH)-prod.exe
 
+publish-release:
+	rm -rf bin/*
+	git checkout $(TAG) && $(MAKE) release && $(MAKE) publish
 
 pprof-cpu:
 	go tool pprof -trim_path=github.com/VictoriaMetrics/VictoriaMetrics $(PPROF_FILE)
