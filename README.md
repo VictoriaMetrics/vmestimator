@@ -13,9 +13,9 @@
 
 Here are some resources and information about vmestimator:
 
-- [Documentation](https://docs.victoriametrics.com/victoriametrics/vmestimator/)
+- [Documentation](https://docs.victoriametrics.com/vmestimator/)
 - Available: [Binary releases](https://github.com/VictoriaMetrics/vmestimator/releases/latest), docker images [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator/) and [Quay](https://quay.io/repository/victoriametrics/victoria-traces), [Source code](https://github.com/VictoriaMetrics/vmestimator)
-- Deployment types: [Single-node version](https://docs.victoriametrics.com/victoriametrics/vmestimator/#design), [Cluster version](https://docs.victoriametrics.com/victoriametrics/vmestimator/#cluster)
+- Deployment types: [Single-node version](https://docs.victoriametrics.com/vmestimator/#design), [Cluster version](https://docs.victoriametrics.com/vmestimator/#cluster)
 <!-- 
 TODO - Changelog: [CHANGELOG](https://docs.victoriametrics.com/victoriametrics/vmestimator/changelog/)
 -->
