@@ -8,9 +8,9 @@ title: vmestimator
 tags:
   - metrics
   - cardinality
+url: /victoriametrics/vmestimator/
 aliases:
-  - /vmestimator.html
-  - /vmestimator/index.html
-  - /vmestimator/
+  - /victoriametrics/vmestimator.html
+  - /victoriametrics/vmestimator/index.html
 ---
 {{% content "vmestimator.md" %}}
