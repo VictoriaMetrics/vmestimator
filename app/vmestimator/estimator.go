@@ -156,7 +156,7 @@ func putGroupValuesSlice(key *[]byte) {
 
 func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	bucketsNum := uint64(len(e.buckets))
-	var cnt int
+
 	if len(e.groupBy) == 0 {
 		tssLen := uint32(len(tss))
 		start := fastrand.Uint32n(tssLen)
@@ -166,12 +166,12 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			ts := tss[i]
 			bi := int(ts.Fingerprint % bucketsNum)
 			e.buckets[bi].insert(ts, "", nil)
-			cnt++
-			continue
 		}
-		e.insertTotal.Add(cnt)
+		e.insertTotal.Add(len(tss))
+		return
 	}
 
+	var cnt int
 	groupValuesKeyP := getGroupValuesKeySlice()
 	groupValuesKey := *groupValuesKeyP
 	defer func() {
