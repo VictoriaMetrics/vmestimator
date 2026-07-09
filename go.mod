@@ -1,6 +1,6 @@
 module github.com/VictoriaMetrics/vmestimator
 
-go 1.26.4
+go 1.26.5
 
 replace github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.12-reuse-memory
 
