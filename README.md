@@ -16,7 +16,7 @@ Here are some resources and information about vmestimator:
 - [Documentation](https://docs.victoriametrics.com/victoriametrics/vmestimator/)
 - Available: [Binary releases](https://github.com/VictoriaMetrics/vmestimator/releases/latest), docker images [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator/) and [Quay](https://quay.io/repository/victoriametrics/victoria-traces), [Source code](https://github.com/VictoriaMetrics/vmestimator)
 - Deployment types: [Single-node version](https://docs.victoriametrics.com/victoriametrics/vmestimator/#design), [Cluster version](https://docs.victoriametrics.com/victoriametrics/vmestimator/#cluster)
-- Changelog: [CHANGELOG](https://github.com/VictoriaMetrics/vmestimator/tree/main/docs/vmestimator)
+- Changelog: [CHANGELOG](https://github.com/VictoriaMetrics/vmestimator/tree/main/docs/vmestimator/CHANGELOG.md)
 - Community: [Slack](https://slack.victoriametrics.com/), [X (Twitter)](https://x.com/VictoriaMetrics), [LinkedIn](https://www.linkedin.com/company/victoriametrics/), [YouTube](https://www.youtube.com/@VictoriaMetrics)
 
 Both the single-node and the cluster versions of vmestimator are open source and free to use.
