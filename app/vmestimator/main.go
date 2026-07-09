@@ -19,6 +19,7 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/pushmetrics"
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
+	"github.com/valyala/fastrand"
 )
 
 var (
@@ -80,8 +81,11 @@ func main() {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
 			err := protoparser.Parse(r.Body, groupLabels, func(tss []protoparser.TimeSerie) {
-				for _, e := range es {
-					e.insertMany(tss)
+				esLen := uint32(len(es))
+				start := fastrand.Uint32n(esLen)
+				for j := uint32(0); j < esLen; j++ {
+					i := (start + j) % esLen
+					es[i].insertMany(tss)
 				}
 			})
 			if err != nil {

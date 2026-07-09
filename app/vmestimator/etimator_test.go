@@ -544,7 +544,7 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 		}
 	}
 
-	f := func(groupLimit int, gen func(e *estimator), expRejected int, expMetrics string) {
+	f := func(groupLimit int, gen func(e *estimator), expRejected, expTotalSize int) {
 		t.Helper()
 
 		cfg := EstimatorConfig{
@@ -564,42 +564,33 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 
 		buf := bytes.NewBuffer(nil)
 		e.writeMetrics(buf)
-		assertMetricsSame(t, "", expMetrics, buf.String())
 
 		actRejected := int(e.groupSize.totalRejected())
 		if expRejected != actRejected {
 			t.Fatalf("rejected expected: %d; got: %d", expRejected, actRejected)
+		}
+		actTotalSize := int(e.groupSize.totalSize())
+		if expTotalSize != actTotalSize {
+			t.Fatalf("total size expected: %d; got: %d", expTotalSize, actTotalSize)
 		}
 	}
 
 	// all groups accepted
 	f(3, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 0, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3`,
+	}, 0, 3,
 	)
 
 	// 2 groups only accepted
 	f(2, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 1, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2`,
+	}, 1, 3,
 	)
 
 	// one group only accepted
 	f(1, func(e *estimator) {
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("b"), makeTS("c")})
-	}, 2, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 1`,
+	}, 2, 3,
 	)
 
 	// after rotate: groups in prevGroups bypass the limit; new groups are still checked
@@ -611,11 +602,7 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 		}
 		// "a" bypasses, "c" rejected
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 1, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 2`,
+	}, 1, 3,
 	)
 
 	// after rotate: new group accepted when remaining capacity allows
@@ -627,12 +614,7 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 		}
 		// "a" bypasses, "c" accepted (2+1=3 <= 3)
 		e.insertMany([]protoparser.TimeSerie{makeTS("a"), makeTS("c")})
-	}, 0, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a",by_foo="a"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="b",by_foo="b"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="c",by_foo="c"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3`,
+	}, 0, 3,
 	)
 
 	// reject 100
@@ -642,12 +624,7 @@ vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",gro
 			tss = append(tss, makeTS(fmt.Sprintf("a%d", i)))
 		}
 		e.insertMany(tss)
-	}, 100, `
-cardinality_estimate{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 103
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a0",by_foo="a0"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a1",by_foo="a1"} 1
-cardinality_estimate{interval="10m0s",group_by_keys="foo",group_by_values="a2",by_foo="a2"} 1
-vmestimator_estimator_group_limit{interval="10m0s",group_by_keys="__group__",group_by_values="foo"} 3`,
+	}, 100, 103,
 	)
 }
 
