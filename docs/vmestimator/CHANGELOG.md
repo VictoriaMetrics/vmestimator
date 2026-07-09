@@ -16,6 +16,10 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.7](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.7)
+
+Released at 2026-07-09
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): randomize estimator iteration order to reduce lock contention. See [#15](https://github.com/VictoriaMetrics/vmestimator/pull/15).
 
 ## [v0.1.6](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.6)
