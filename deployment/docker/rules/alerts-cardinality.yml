@@ -14,8 +14,6 @@ groups:
           summary: "High cardinality for job {{ $labels.group_by_values }}"
           description: "Job {{ $labels.group_by_values }} has {{ $value }} estimated series over the last {{ $labels.interval }}, exceeding the 20000 series threshold."
 
-  - name: 'cardinality'
-    rules:
       # 10% value is taken from TooHighChurnRate alert
       # See https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/deployment/docker/rules/alerts-single-node.yml#L88
       - alert: 'GlobalChurnTooHigh'
