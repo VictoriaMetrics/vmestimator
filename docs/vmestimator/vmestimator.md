@@ -4,7 +4,7 @@
 
 Consider a setup where metrics are pushed or scraped from hundreds of targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label.
-Overnight, that job's cardinality explodes from 500 to 500,000 time series.
+Overnight, that job's [cardinality](https://www.robustperception.io/cardinality-is-key/) explodes from 500 to 500,000 time series.
 Suddenly, Time Series DB that stores these metrics starts consuming 100x more memory and disk.
 Ingestion slows down, storage struggles to keep up, and in the worst case becomes unavailable.
 
