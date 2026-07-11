@@ -67,6 +67,23 @@ groups:
           summary: "High churn rate for job {{ $labels.group_by_values }}"
           description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
 
+      - alert: 'JobTooHighChurnRate'
+        expr: |
+          (
+              max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
+              -
+              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
+          )
+          /
+          max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance) * 100 > 10
+        for: '15m'
+        labels:
+          severity: 'warning'
+        annotations:
+          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s"
+          summary: "High churn rate for job {{ $labels.group_by_values }}"
+          description: 'Job {{ $labels.group_by_values }} has {{ printf "%.0f%%" $value }} of series churned between the 15m and 30m cardinality windows, exceeding the 10% threshold.'
+
       - alert: 'CardinalityGroupLimitNearlyReached'
         expr: |
           (
