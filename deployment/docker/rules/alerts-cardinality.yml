@@ -12,16 +12,6 @@ groups:
 
   - name: 'cardinality'
     rules:
-      - alert: 'JobTooHighCardinality'
-        expr: 'max (cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance) > 20000'
-        for: '15m'
-        labels:
-          severity: 'warning'
-        annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-interval={{ $labels.interval }}"
-          summary: "High cardinality for job {{ $labels.group_by_values }}"
-          description: "Job {{ $labels.group_by_values }} has {{ $value }} estimated series over the last {{ $labels.interval }}, exceeding the 20000 series threshold."
-
       - alert: 'JobTooHighChurnRate'
         expr: |
           (
