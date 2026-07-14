@@ -394,6 +394,10 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 - `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
 - `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
+Additionally, every stream (including non-grouped ones) exposes:
+
+- `vmestimator_estimator_insert_total{group_by_keys, interval}` — total number of samples inserted into this stream's estimator
+
 
 ## Dashboards
 
