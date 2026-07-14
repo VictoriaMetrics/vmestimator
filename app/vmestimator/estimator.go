@@ -84,7 +84,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q}`, e.groupByKeysLabel),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval),
 	)
 	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalRejected())
