@@ -16,7 +16,7 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
-* FEATURE: [alerts](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml): add `GlobalChurnTooHigh` alert to detect when global series churn rate exceeds 10%. See [#13](https://github.com/VictoriaMetrics/vmestimator/pull/13).
+* FEATURE: [alerts](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml): add `GlobalChurnTooHigh` alert to detect when global series churn or cardinality growth exceeds 10%. See [#13](https://github.com/VictoriaMetrics/vmestimator/pull/13).
 * FEATURE: [alerts](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml): update `JobChurnTooHigh` alert (previously `JobTooHighChurnRate`) to also detect rapid cardinality growth. The threshold was raised from 10% to 20% and the `for` window extended from 15m to 30m to reduce false positives. See [#13](https://github.com/VictoriaMetrics/vmestimator/pull/13).
 * FEATURE: [alerts](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml): replace the static-threshold `JobTooHighCardinality` alert with adaptive 3-sigma anomaly detection alerts `GlobalCardinalityTooHigh` and `JobCardinalityTooHigh`. See [#17](https://github.com/VictoriaMetrics/vmestimator/pull/17).
 
