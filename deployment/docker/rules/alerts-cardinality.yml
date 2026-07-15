@@ -46,6 +46,35 @@ groups:
             High Churn Rate is tightly connected with database performance and may result in unexpected OOM's or slow queries.
             To investigate, check job or __name__ or other available cardinality estimates, or use the VM cardinality explorer.
 
+      - alert: 'JobChurnTooHigh'
+        expr: |
+          # Detects short-lived series: series present in 30m window but absent in 15m window.
+          # Higher values indicate more short-lived or disappearing series.
+          (
+              max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
+              -
+              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
+          )
+          /
+          max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance) * 100 > 20
+          OR
+          # Detects cardinality growth: compares current 15m estimate to the same
+          # estimate 15 minutes ago.
+          (
+              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
+              -
+              max(cardinality_estimate{group_by_keys="job",interval="15m0s"} offset 15m) without (instance)
+          )
+          /
+          max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance) * 100 > 20
+        for: '30m'
+        labels:
+          severity: 'warning'
+        annotations:
+          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
+          summary: "High churn rate for job {{ $labels.group_by_values }}"
+          description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
+
       - alert: 'GlobalCardinalityTooHigh'
         expr: |
           # 3-sigma anomaly detection: fire when current cardinality exceeds the weekly
@@ -81,36 +110,6 @@ groups:
             exceeding the weekly mean + 3 stddev.
             High cardinality is often caused by labels with unbounded values (UUIDs, request IDs, error messages, URL paths).
             To investigate, check job or __name__ cardinality estimates, or use the VM cardinality explorer.
-
-      - alert: 'JobChurnTooHigh'
-        expr: |
-          # Detects short-lived series: series present in 30m window but absent in 15m window.
-          # Higher values indicate more short-lived or disappearing series.
-          (
-              max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance) * 100 > 20
-          OR
-          # Detects cardinality growth: compares current 15m estimate to the same
-          # estimate 15 minutes ago.
-          (
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"} offset 15m) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance) * 100 > 20
-        for: '30m'
-        labels:
-          severity: 'warning'
-        annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
-          summary: "High churn rate for job {{ $labels.group_by_values }}"
-          description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
-
 
       - alert: 'JobCardinalityTooHigh'
         expr: |
