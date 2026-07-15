@@ -38,6 +38,9 @@ publish: \
 package: \
 	package-vmestimator
 
+publish-latest:
+	PKG_TAG=$(TAG) APP_NAME=vmestimator $(MAKE) publish-via-docker-latest
+
 # When adding a new crossbuild target, please also add it to the .github/workflows/build.yml
 crossbuild:
 	$(MAKE_PARALLEL) vmestimator-crossbuild

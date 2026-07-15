@@ -2,18 +2,16 @@
 # threshold calibration for your specific setup. They are based on the example
 # configuration at https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml
 groups:
+  - name: 'cardinality.recording'
+    rules:
+      - record: 'cardinality_estimate:weekly_avg'
+        expr: 'avg_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
+
+      - record: 'cardinality_estimate:weekly_stddev'
+        expr: 'stddev_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
+
   - name: 'cardinality'
     rules:
-      - alert: 'JobTooHighCardinality'
-        expr: 'max (cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance) > 20000'
-        for: '15m'
-        labels:
-          severity: 'warning'
-        annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-interval={{ $labels.interval }}"
-          summary: "High cardinality for job {{ $labels.group_by_values }}"
-          description: "Job {{ $labels.group_by_values }} has {{ $value }} estimated series over the last {{ $labels.interval }}, exceeding the 20000 series threshold."
-
       # 10% value is taken from TooHighChurnRate alert
       # See https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/deployment/docker/rules/alerts-single-node.yml#L88
       - alert: 'GlobalChurnTooHigh'
@@ -48,6 +46,42 @@ groups:
             High Churn Rate is tightly connected with database performance and may result in unexpected OOM's or slow queries.
             To investigate, check job or __name__ or other available cardinality estimates, or use the VM cardinality explorer.
 
+      - alert: 'GlobalCardinalityTooHigh'
+        expr: |
+          # 3-sigma anomaly detection: fire when current cardinality exceeds the weekly
+          # mean by more than 3 standard deviations, using the recording rules computed
+          # in the cardinality.recording group above.
+          (
+            max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without(instance)
+            >
+            (
+              cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"}
+              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="__global__",interval="30m0s"}
+            )
+          )
+          # Floor condition: ensures the threshold is never too close to the mean — for a perfectly
+          # stable baseline where stddev=0, require at least 20% growth before firing.
+          AND (
+            max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without(instance)
+            >
+            cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"} * 1.2
+          )
+          # Guard: skip when the global historical baseline is too small for 3-sigma to be
+          # meaningful — a database with avg 10k series hitting 13k is noise, not an incident.
+          # Adjust the threshold to match the typical scale of your environment.
+          AND cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"} > 100000
+        for: '30m'
+        labels:
+          severity: 'warning'
+        annotations:
+          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys={{ $labels.group_by_keys }}&var-interval={{ $labels.interval }}&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
+          summary: "Global cardinality is too high"
+          description: |
+            Global cardinality is {{ printf "%.0f" $value }} estimated active series,
+            exceeding the weekly mean + 3 stddev.
+            High cardinality is often caused by labels with unbounded values (UUIDs, request IDs, error messages, URL paths).
+            To investigate, check job or __name__ cardinality estimates, or use the VM cardinality explorer.
+
       - alert: 'JobChurnTooHigh'
         expr: |
           # Detects short-lived series: series present in 30m window but absent in 15m window.
@@ -76,6 +110,42 @@ groups:
           dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
           summary: "High churn rate for job {{ $labels.group_by_values }}"
           description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
+
+
+      - alert: 'JobCardinalityTooHigh'
+        expr: |
+          # 3-sigma anomaly detection: fire when current cardinality exceeds the weekly
+          # mean by more than 3 standard deviations, using the recording rules computed
+          # in the cardinality.recording group above.
+          (
+            max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance)
+            >
+            (
+              cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"}
+              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="job",interval="30m0s"}
+            )
+          )
+          AND
+          (
+            max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance)
+            >
+            cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"} * 1.2
+          )
+          # Guard: skip jobs whose historical baseline is too small for 3-sigma to be
+          # meaningful — a job with avg 5 series hitting 10 is noise, not an incident.
+          # Adjust the threshold to match the typical scale of your environment.
+          AND cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"} > 10000
+        for: '30m'
+        labels:
+          severity: 'warning'
+        annotations:
+          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys={{ $labels.group_by_keys }}&var-interval={{ $labels.interval }}&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
+          summary: "High cardinality for job {{ $labels.group_by_values }}"
+          description: |
+            Job {{ $labels.group_by_values }} has {{ printf "%.0f" $value }} estimated active series,
+            exceeding the weekly mean + 3 stddev.
+            High cardinality is often caused by labels with unbounded values (UUIDs, request IDs, error messages, URL paths).
+            To investigate, check the job's instance scrape response in vmagent, or use the VM cardinality explorer.
 
       - alert: 'CardinalityGroupLimitNearlyReached'
         expr: |

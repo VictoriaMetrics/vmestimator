@@ -11,13 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/axiomhq/hyperloglog"
+	"github.com/dgryski/go-metro"
+	"github.com/valyala/fastrand"
+
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
-	"github.com/axiomhq/hyperloglog"
-	"github.com/dgryski/go-metro"
-
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
@@ -83,7 +84,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q}`, e.groupByKeysLabel),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval),
 	)
 	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalRejected())
@@ -156,6 +157,21 @@ func putGroupValuesSlice(key *[]byte) {
 func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	bucketsNum := uint64(len(e.buckets))
 
+	if len(e.groupBy) == 0 {
+		tssLen := uint32(len(tss))
+		start := fastrand.Uint32n(tssLen)
+		for j := uint32(0); j < tssLen; j++ {
+			i := (start + j) % tssLen
+
+			ts := tss[i]
+			bi := int(ts.Fingerprint % bucketsNum)
+			e.buckets[bi].insert(ts, "", nil)
+		}
+		e.insertTotal.Add(len(tss))
+		return
+	}
+
+	var cnt int
 	groupValuesKeyP := getGroupValuesKeySlice()
 	groupValuesKey := *groupValuesKeyP
 	defer func() {
@@ -165,14 +181,12 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 	groupValues := make([]string, len(e.groupBy))
 
-	var cnt int
-	for _, ts := range tss {
-		if len(e.groupBy) == 0 {
-			i := int(ts.Fingerprint % bucketsNum)
-			e.buckets[i].insert(ts, "", nil)
-			cnt++
-			continue
-		}
+	tssLen := uint32(len(tss))
+	start := fastrand.Uint32n(tssLen)
+	for j := uint32(0); j < tssLen; j++ {
+		i := (start + j) % tssLen
+
+		ts := tss[i]
 
 		groupValuesKey = groupValuesKey[:0]
 		clear(groupValues)
@@ -198,8 +212,8 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			continue
 		}
 
-		i := int(hash(groupValuesKey) % bucketsNum)
-		e.buckets[i].insert(ts, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
+		bi := int(hash(groupValuesKey) % bucketsNum)
+		e.buckets[bi].insert(ts, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
 		cnt++
 	}
 

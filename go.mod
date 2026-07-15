@@ -1,8 +1,8 @@
 module github.com/VictoriaMetrics/vmestimator
 
-go 1.26.4
+go 1.26.5
 
-replace github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.12-reuse-memory
+replace github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.13-reuse-memory
 
 require (
 	github.com/VictoriaMetrics/VictoriaMetrics v1.146.0
@@ -12,6 +12,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33
 	github.com/golang/snappy v1.0.0
+	github.com/valyala/fastrand v1.1.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -21,7 +22,6 @@ require (
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/valyala/gozstd v1.24.0 // indirect
 	github.com/valyala/histogram v1.2.0 // indirect
