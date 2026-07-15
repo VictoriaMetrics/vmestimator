@@ -5,10 +5,10 @@ groups:
   - name: 'cardinality.recording'
     rules:
       - record: 'cardinality_estimate:weekly_avg'
-        expr: 'avg_over_time((max(cardinality_estimate{interval="30m0s"}) without(instance))[1w:5m])'
+        expr: 'avg_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
 
       - record: 'cardinality_estimate:weekly_stddev'
-        expr: 'stddev_over_time((max(cardinality_estimate{interval="30m0s"}) without(instance))[1w:5m])'
+        expr: 'stddev_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
 
   - name: 'cardinality'
     rules:
