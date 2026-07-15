@@ -4,7 +4,7 @@
 
 Consider a setup where metrics are pushed or scraped from hundreds of targets.
 One day, a team deploys a new version of their service with a `trace_id` or `user_id` label.
-Overnight, that job's cardinality explodes from 500 to 500,000 time series.
+Overnight, that job's [cardinality](https://www.robustperception.io/cardinality-is-key/) explodes from 500 to 500,000 time series.
 Suddenly, Time Series DB that stores these metrics starts consuming 100x more memory and disk.
 Ingestion slows down, storage struggles to keep up, and in the worst case becomes unavailable.
 
@@ -34,7 +34,7 @@ the ingested metrics according to the given [configuration](https://github.com/V
 and exposes [cardinality metrics](https://github.com/VictoriaMetrics/vmestimator/tree/main#cardinality-metrics)
 in Prometheus exposition format on `/metrics` endpoint, so they can be scraped by any Prometheus-compatible collector.
 
-<img style="min-width:0;width: 100%" src="design-1.webp" />
+![design-1](/victoriametrics/vmestimator/design-1.webp)
 
 `vmestimator` is heavily optimized for high-throughput processing. It approximately requires 1 CPU core for ingesting
 around 800K metric samples/s and around 150MiB of memory per each [stream](https://github.com/VictoriaMetrics/vmestimator#configuration)
@@ -65,7 +65,7 @@ Run vmagent:
 The next step is to expose cardinality estimates as metrics.
 For this, `vmagent` should scrape the estimator `/metrics` endpoint and forward those metrics to a `vmsingle` instance (or another VictoriaMetrics storage).
 
-<img style="min-width:0;width: 100%" src="design-2.webp" />
+![design-2](/victoriametrics/vmestimator/design-2.webp)
 
 > In this way, `vmestimator` is just an alternative pipeline for ingesting metrics and collecting computed cardinality estimates.
 Overloading vmestimator won't have any impact on the rest of the Observability pipeline.
@@ -80,11 +80,11 @@ In this architecture, `vmestimator` metrics are isolated from production observa
 ensuring cardinality visibility remains available even during incidents affecting the primary monitoring system.
 
 The resulting topology looks like this:
-<img style="min-width:0;width: 100%" src="design-3.webp" />
+![design-3](/victoriametrics/vmestimator/design-3.webp)
 
 ## Install
 
-Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml).
+Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml).
 Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
 ```bash
 docker run --rm \
@@ -359,7 +359,7 @@ Use the cardinality explorer when you need to drill into a specific metric or la
 
 Instances are split into two roles: **storage nodes** accept Prometheus remote write and maintain local HyperLogLog sketches; **selector nodes** query all storage nodes, merge their sketches, and expose a unified cardinality estimate. Cardinality estimate results should be scraped from selector nodes.
 
-<img style="min-width:0;width: 100%" src="https://github.com/user-attachments/assets/846e5f77-378a-44dc-a4c8-2a1c64eca9d8" />
+![cluster](/victoriametrics/vmestimator/cluster.webp)
 
 **Storage nodes:**
 ```
@@ -394,16 +394,20 @@ When grouping is enabled, vmestimator exposes per-bucket operational metrics at 
 - `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
 - `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
 
+Additionally, every stream (including non-grouped ones) exposes:
+
+- `vmestimator_estimator_insert_total{group_by_keys, interval}` — total number of samples inserted into this stream's estimator
+
 
 ## Dashboards
 
 Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
 
 - [VictoriaMetrics - vmestimator](https://play-grafana.victoriametrics.com/d/mkv22l4/victoriametrics-vmestimator) — application health: CPU, memory, ingestion rates, concurrent inserts, and group key saturation.
-  <img width="1507" height="801" alt="Screenshot 2026-06-29 at 19 06 46" src="https://github.com/user-attachments/assets/cbfd979d-f403-4270-b098-2d2f0b392172" />
+  ![dashboard-vmestimator](/victoriametrics/vmestimator/dashboard-vmestimator.webp)
 
 - [VictoriaMetrics - Cardinality Estimations](https://play-grafana.victoriametrics.com/d/mktd5g9/victoriametrics-cardinality-estimations) — cardinality estimations: shows estimations, churn over configured label dimensions.
-  <img width="1510" height="796" alt="Screenshot 2026-06-29 at 19 05 47" src="https://github.com/user-attachments/assets/a1aea6e1-8714-4d5a-a629-8bdee978f1c6" />
+  ![dashboard-cardinality](/victoriametrics/vmestimator/dashboard-cardinality.webp)
 
 ## How to build from sources
 
