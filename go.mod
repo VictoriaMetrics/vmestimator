@@ -8,7 +8,7 @@ require (
 	github.com/VictoriaMetrics/VictoriaMetrics v1.146.0
 	github.com/VictoriaMetrics/easyproto v1.2.0
 	github.com/VictoriaMetrics/metrics v1.44.0
-	github.com/axiomhq/hyperloglog v0.0.10-reuse-memory
+	github.com/axiomhq/hyperloglog v0.0.13-reuse-memory
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33
 	github.com/golang/snappy v1.0.0
