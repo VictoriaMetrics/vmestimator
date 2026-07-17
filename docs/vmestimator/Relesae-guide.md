@@ -26,5 +26,7 @@ TAG=v0.1.8 make github-create-release
 
 * Upload Release assets:
 ```sh
-
+TAG=v0.1.8 make github-upload-assets
 ```
+
+* Publish [release on Github](https://github.com/VictoriaMetrics/vmestimator/releases).
