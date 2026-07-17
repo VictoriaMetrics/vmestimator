@@ -7,8 +7,24 @@ sitemap:
   disable: true
 ---
 
-* Create tag locally.
+* Cut release in changelog.
 
+* Create tag locally:
+```sh
+git tag -m "Release v0.1.8" -s 
 ```
-git tag -m "Release x.y.z" -s 
+
+* Publish release:
+```sh
+TAG=v0.1.8 make publish-release
+```
+
+* Create draft Github Release:
+```sh
+TAG=v0.1.8 make github-create-release
+```
+
+* Upload Release assets:
+```sh
+
 ```
