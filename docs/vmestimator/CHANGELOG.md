@@ -16,7 +16,7 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
-## v0.1.8
+## [v0.1.8](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.8)
 
 Released at 2026-07-17
 
