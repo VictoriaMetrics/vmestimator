@@ -14,12 +14,6 @@ type Config struct {
 	Streams []EstimatorConfig `yaml:"streams"`
 }
 
-type DeeperConfig struct {
-	GroupBy    []string `yaml:"group_by"`
-	TopN       int      `yaml:"top_n"`
-	GroupLimit int      `yaml:"group_limit"`
-}
-
 type EstimatorConfig struct {
 	GroupBy      []string          `yaml:"group_by"`
 	GroupLimit   int               `yaml:"group_limit"`
@@ -28,7 +22,6 @@ type EstimatorConfig struct {
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`
-	Deeper       *DeeperConfig     `yaml:"deeper"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {
