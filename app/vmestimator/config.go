@@ -45,18 +45,6 @@ func loadConfig(path string) ([]*estimator, error) {
 		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
 			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
 		}
-		if stream.Deeper != nil {
-			if len(stream.GroupBy) == 0 {
-				return nil, fmt.Errorf("stream with deeper requires non-empty group_by")
-			}
-			if len(stream.Deeper.GroupBy) == 0 {
-				return nil, fmt.Errorf("stream.deeper.group_by must not be empty")
-			}
-			if stream.Deeper.TopN <= 0 {
-				return nil, fmt.Errorf("stream.deeper.top_n must be positive; got %d", stream.Deeper.TopN)
-			}
-			sort.Strings(stream.Deeper.GroupBy)
-		}
 	}
 
 	es := make([]*estimator, 0, len(cfg.Streams))
