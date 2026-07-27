@@ -503,7 +503,7 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 		return func(e *estimator) {
 			e.insertMany([]protoparser.TimeSerie{
 				{
-					Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+					Labels:      []protoparser.Label{{Name: "foo", Value: fooVal}},
 					Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 				},
 			})
@@ -539,7 +539,7 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 func TestGroupEstimateGroupLimit(t *testing.T) {
 	makeTS := func(fooVal string) protoparser.TimeSerie {
 		return protoparser.TimeSerie{
-			Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+			Labels:      []protoparser.Label{{Name: "foo", Value: fooVal}},
 			Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 		}
 	}

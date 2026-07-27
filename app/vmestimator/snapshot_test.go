@@ -365,7 +365,7 @@ func TestGroupSnapshot(t *testing.T) {
 		return func(e *estimator) {
 			e.insertMany([]protoparser.TimeSerie{
 				{
-					Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+					Labels:      []protoparser.Label{{Name: "foo", Value: fooVal}},
 					Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 				},
 			})
@@ -382,7 +382,7 @@ func TestGroupSnapshot(t *testing.T) {
 func TestGroupSnapshotGroupLimit(t *testing.T) {
 	makeTS := func(fooVal string) protoparser.TimeSerie {
 		return protoparser.TimeSerie{
-			Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+			Labels:      []protoparser.Label{{Name: "foo", Value: fooVal}},
 			Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 		}
 	}
