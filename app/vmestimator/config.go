@@ -14,6 +14,12 @@ type Config struct {
 	Streams []EstimatorConfig `yaml:"streams"`
 }
 
+type DeeperConfig struct {
+	GroupBy    []string `yaml:"group_by"`
+	TopN       int      `yaml:"top_n"`
+	GroupLimit int      `yaml:"group_limit"`
+}
+
 type EstimatorConfig struct {
 	GroupBy      []string          `yaml:"group_by"`
 	GroupLimit   int               `yaml:"group_limit"`
@@ -22,6 +28,7 @@ type EstimatorConfig struct {
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`
+	Deeper       *DeeperConfig     `yaml:"deeper"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {
@@ -44,6 +51,18 @@ func loadConfig(path string) ([]*estimator, error) {
 		sort.Strings(stream.GroupBy)
 		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
 			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
+		}
+		if stream.Deeper != nil {
+			if len(stream.GroupBy) == 0 {
+				return nil, fmt.Errorf("stream with deeper requires non-empty group_by")
+			}
+			if len(stream.Deeper.GroupBy) == 0 {
+				return nil, fmt.Errorf("stream.deeper.group_by must not be empty")
+			}
+			if stream.Deeper.TopN <= 0 {
+				return nil, fmt.Errorf("stream.deeper.top_n must be positive; got %d", stream.Deeper.TopN)
+			}
+			sort.Strings(stream.Deeper.GroupBy)
 		}
 	}
 

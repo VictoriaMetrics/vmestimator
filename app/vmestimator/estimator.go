@@ -196,7 +196,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 				groupValuesKey = append(groupValuesKey, ',')
 			}
 
-			for _, l := range ts.GroupLabels {
+			for _, l := range ts.Labels {
 				if l.Name == labelName {
 					hasNames = true
 

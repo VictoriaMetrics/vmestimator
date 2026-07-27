@@ -160,7 +160,7 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100)}},
+					Labels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100)}},
 					Fingerprint: i,
 				}})
 				i++
@@ -184,7 +184,7 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%10_000)}},
+					Labels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%10_000)}},
 					Fingerprint: i,
 				}})
 				i++
@@ -208,7 +208,7 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					GroupLabels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100_000)}},
+					Labels: []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100_000)}},
 					Fingerprint: i,
 				}})
 				i++
@@ -270,7 +270,7 @@ func insertSeriesIntoEstimator(e *estimator, numSeries, groupsNum int) {
 		}
 		e.insertMany([]protoparser.TimeSerie{
 			{
-				GroupLabels: labels,
+				Labels: labels,
 				Fingerprint: hash([]byte(fmt.Sprintf("foobarbaz%d", i))),
 			},
 		})

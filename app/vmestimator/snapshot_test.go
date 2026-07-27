@@ -156,18 +156,18 @@ func TestGroupSnapshot(t *testing.T) {
 				for barI := 0; barI < max(1, barCard); barI++ {
 					for bazI := 0; bazI < max(1, bazCard); bazI++ {
 						ts := protoparser.TimeSerie{}
-						ts.GroupLabels = append(ts.GroupLabels, protoparser.Label{Name: "__name__", Value: "the_metric_name"})
+						ts.Labels = append(ts.Labels, protoparser.Label{Name: "__name__", Value: "the_metric_name"})
 						if fooCard > 0 {
-							ts.GroupLabels = append(ts.GroupLabels, protoparser.Label{Name: "foo", Value: fmt.Sprintf("%s%d", seed, fooI)})
+							ts.Labels = append(ts.Labels, protoparser.Label{Name: "foo", Value: fmt.Sprintf("%s%d", seed, fooI)})
 						}
 						if barCard > 0 {
-							ts.GroupLabels = append(ts.GroupLabels, protoparser.Label{Name: "bar", Value: fmt.Sprintf("%s%d", seed, barI)})
+							ts.Labels = append(ts.Labels, protoparser.Label{Name: "bar", Value: fmt.Sprintf("%s%d", seed, barI)})
 						}
 						if bazCard > 0 {
-							ts.GroupLabels = append(ts.GroupLabels, protoparser.Label{Name: "baz", Value: fmt.Sprintf("%s%d", seed, bazI)})
+							ts.Labels = append(ts.Labels, protoparser.Label{Name: "baz", Value: fmt.Sprintf("%s%d", seed, bazI)})
 						}
 						var fpBuf []byte
-						for _, l := range ts.GroupLabels {
+						for _, l := range ts.Labels {
 							fpBuf = append(fpBuf, l.Name...)
 							fpBuf = append(fpBuf, '=')
 							fpBuf = append(fpBuf, l.Value...)
@@ -365,7 +365,7 @@ func TestGroupSnapshot(t *testing.T) {
 		return func(e *estimator) {
 			e.insertMany([]protoparser.TimeSerie{
 				{
-					GroupLabels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+					Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
 					Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 				},
 			})
@@ -382,7 +382,7 @@ func TestGroupSnapshot(t *testing.T) {
 func TestGroupSnapshotGroupLimit(t *testing.T) {
 	makeTS := func(fooVal string) protoparser.TimeSerie {
 		return protoparser.TimeSerie{
-			GroupLabels: []protoparser.Label{{Name: "foo", Value: fooVal}},
+			Labels: []protoparser.Label{{Name: "foo", Value: fooVal}},
 			Fingerprint: hash([]byte("foo=" + fooVal + ",")),
 		}
 	}

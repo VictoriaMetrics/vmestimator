@@ -48,18 +48,6 @@ func main() {
 		})
 	}
 
-	groupLabelsMap := make(map[string]struct{})
-	for _, e := range es {
-		for _, l := range e.groupBy {
-			groupLabelsMap[l] = struct{}{}
-		}
-	}
-
-	groupLabels := make([]string, 0, len(groupLabelsMap))
-	for k := range groupLabelsMap {
-		groupLabels = append(groupLabels, k)
-	}
-
 	listenAddrs := *httpListenAddrs
 	if len(listenAddrs) == 0 {
 		listenAddrs = []string{":8490"}
@@ -80,7 +68,7 @@ func main() {
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			err := protoparser.Parse(r.Body, groupLabels, func(tss []protoparser.TimeSerie) {
+			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
 				esLen := uint32(len(es))
 				start := fastrand.Uint32n(esLen)
 				for j := uint32(0); j < esLen; j++ {
