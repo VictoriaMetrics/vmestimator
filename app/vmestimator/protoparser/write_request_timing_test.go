@@ -23,7 +23,7 @@ func BenchmarkWriteRequest_UnmarshalProtobuf(b *testing.B) {
 			b.SetBytes(int64(len(data)))
 			for b.Loop() {
 				wru.Reset()
-				if err := wru.UnmarshalProtobuf(data, func(tss []TimeSerie) {
+				if err := wru.UnmarshalProtobuf(data, false, func(tss []TimeSerie) {
 					cnt += len(tss)
 				}); err != nil {
 					b.Fatalf("unexpected error: %s", err)
