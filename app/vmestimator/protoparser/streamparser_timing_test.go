@@ -12,14 +12,6 @@ import (
 
 func BenchmarkParse(b *testing.B) {
 	data := buildSnappyEncodedWriteRequest(5000, 20, 20, 3)
-	groupLabels := []string{
-		"foo",
-		"bar",
-		"baz",
-		"__name__",
-		"job",
-		"groupLabel",
-	}
 
 	var cnt int
 
@@ -27,7 +19,7 @@ func BenchmarkParse(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(data)))
 	for b.Loop() {
-		err := Parse(bytes.NewReader(data), groupLabels, func(tss []TimeSerie) {
+		err := Parse(bytes.NewReader(data), func(tss []TimeSerie) {
 			cnt += len(tss)
 		})
 		if err != nil {

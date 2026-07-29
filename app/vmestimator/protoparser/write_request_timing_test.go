@@ -15,15 +15,6 @@ func BenchmarkWriteRequest_UnmarshalProtobuf(b *testing.B) {
 		bName := fmt.Sprintf("Rows=%d/Labels=%d/LabelSize=%d/GroupBy=%d", rows, labels, labelSize, groupBy)
 		b.Run(bName, func(b *testing.B) {
 			data := buildEncodedWriteRequest(data, rows, labels, labelSize, groupBy)
-			groupLabels := []string{
-				"foo",
-				"bar",
-				"baz",
-				"__name__",
-				"job",
-				"groupLabel",
-			}
-
 			wru := getWriteRequestUnmarshaler()
 			cnt := 0
 
@@ -32,7 +23,7 @@ func BenchmarkWriteRequest_UnmarshalProtobuf(b *testing.B) {
 			b.SetBytes(int64(len(data)))
 			for b.Loop() {
 				wru.Reset()
-				if err := wru.UnmarshalProtobuf(data, groupLabels, func(tss []TimeSerie) {
+				if err := wru.UnmarshalProtobuf(data, func(tss []TimeSerie) {
 					cnt += len(tss)
 				}); err != nil {
 					b.Fatalf("unexpected error: %s", err)

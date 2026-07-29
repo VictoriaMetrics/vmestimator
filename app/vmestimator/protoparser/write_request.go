@@ -2,7 +2,6 @@ package protoparser
 
 import (
 	"fmt"
-	"slices"
 	"sync"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
@@ -11,7 +10,7 @@ import (
 )
 
 type TimeSerie struct {
-	GroupLabels []Label
+	Labels      []Label
 	Fingerprint uint64
 }
 
@@ -56,7 +55,7 @@ func (wru *writeRequestUnmarshaler) Reset() {
 	wru.d.Reset()
 }
 
-func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, groupLabels []string, callback func(tss []TimeSerie)) error {
+func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, callback func(tss []TimeSerie)) error {
 	wru.Reset()
 
 	var err error
@@ -91,7 +90,7 @@ func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, groupLabels []
 			ts := &tss[len(tss)-1]
 			d := wru.d
 			d.Reset()
-			labelsPool, err = ts.unmarshalProtobuf(data, groupLabels, labelsPool, d)
+			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, d)
 			if err != nil {
 				return fmt.Errorf("cannot unmarshal timeseries: %w", err)
 			}
@@ -110,7 +109,7 @@ func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, groupLabels []
 	return nil
 }
 
-func (ts *TimeSerie) unmarshalProtobuf(src []byte, groupLabels []string, labelsPool []Label, d *xxhash.Digest) ([]Label, error) {
+func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, d *xxhash.Digest) ([]Label, error) {
 	// message TimeSeries {
 	//   repeated Label labels   = 1;
 	//   repeated Sample samples = 2;
@@ -155,16 +154,13 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, groupLabels []string, labelsP
 
 			_, _ = d.Write(data)
 
-			name := bytesutil.ToUnsafeString(nameBytes)
-			if slices.Contains(groupLabels, name) {
-				labelsPool = append(labelsPool, Label{
-					Name:  name,
-					Value: bytesutil.ToUnsafeString(valueBytes),
-				})
-			}
+			labelsPool = append(labelsPool, Label{
+				Name:  bytesutil.ToUnsafeString(nameBytes),
+				Value: bytesutil.ToUnsafeString(valueBytes),
+			})
 		}
 	}
-	ts.GroupLabels = labelsPool[labelsPoolLen:]
+	ts.Labels = labelsPool[labelsPoolLen:]
 	ts.Fingerprint = d.Sum64()
 	return labelsPool, nil
 }

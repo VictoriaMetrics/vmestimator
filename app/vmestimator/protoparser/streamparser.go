@@ -18,12 +18,12 @@ var maxInsertRequestSize = flagutil.NewBytes("maxInsertRequestSize", 32*1024*102
 // Parse parses Prometheus remote_write message from reader and calls callback for the parsed timeseries.
 //
 // callback shouldn't hold tss after returning.
-func Parse(r io.Reader, groupLabels []string, callback func(tss []TimeSerie)) error {
+func Parse(r io.Reader, callback func(tss []TimeSerie)) error {
 	startTime := fasttime.UnixTimestamp()
 
 	readCalls.Inc()
 	err := protoparserutil.ReadUncompressedData(r, "", maxInsertRequestSize, func(data []byte) error {
-		return parseRequestBody(data, groupLabels, callback)
+		return parseRequestBody(data, callback) //nolint:unparam
 	})
 	if err != nil {
 		readErrors.Inc()
@@ -32,7 +32,7 @@ func Parse(r io.Reader, groupLabels []string, callback func(tss []TimeSerie)) er
 	return nil
 }
 
-func parseRequestBody(data []byte, groupLabels []string, callback func(tss []TimeSerie)) error {
+func parseRequestBody(data []byte, callback func(tss []TimeSerie)) error {
 	// Synchronously process the request in order to properly return errors to Parse caller,
 	// so it could properly return HTTP 503 status code in response.
 	// See https://github.com/VictoriaMetrics/VictoriaMetrics/issues/896
@@ -57,7 +57,7 @@ func parseRequestBody(data []byte, groupLabels []string, callback func(tss []Tim
 	}
 	wru := getWriteRequestUnmarshaler()
 	defer putWriteRequestUnmarshaler(wru)
-	if err := wru.UnmarshalProtobuf(bb.B, groupLabels, func(tss []TimeSerie) {
+	if err := wru.UnmarshalProtobuf(bb.B, func(tss []TimeSerie) {
 		rowsRead.Add(len(tss))
 		callback(tss)
 	}); err != nil {
