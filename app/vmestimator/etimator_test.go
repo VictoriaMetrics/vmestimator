@@ -628,6 +628,39 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 	)
 }
 
+func TestNewEstimatorFail(t *testing.T) {
+	f := func(cfg EstimatorConfig, expErr string) {
+		t.Helper()
+
+		e, err := newEstimator(cfg)
+		if err == nil {
+			t.Fatalf("expected error, but got nil")
+		}
+		if err.Error() != expErr {
+			t.Fatalf("expected '%s' error, but got '%v'", expErr, err)
+		}
+		if e != nil {
+			t.Fatalf("expected nil estimator")
+		}
+	}
+
+	f(EstimatorConfig{
+		GroupBy: []string{"__global__"},
+	}, "group by __global__ is not allowed. __global__, __group__ are reserved keywords")
+
+	f(EstimatorConfig{
+		GroupBy: []string{"foo", "__global__"},
+	}, "group by __global__ is not allowed. __global__, __group__ are reserved keywords")
+
+	f(EstimatorConfig{
+		GroupBy: []string{"__group__"},
+	}, "group by __group__ is not allowed. __global__, __group__ are reserved keywords")
+
+	f(EstimatorConfig{
+		GroupBy: []string{"foo", "__group__"},
+	}, "group by __group__ is not allowed. __global__, __group__ are reserved keywords")
+}
+
 func assertMetricsSame(t *testing.T, msg, exp, act string) {
 	t.Helper()
 
