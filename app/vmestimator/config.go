@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
+	"github.com/VictoriaMetrics/metricsql"
 	"gopkg.in/yaml.v2"
 )
 
@@ -15,6 +17,7 @@ type Config struct {
 }
 
 type EstimatorConfig struct {
+	Filter       string            `yaml:"filter"`
 	GroupBy      []string          `yaml:"group_by"`
 	GroupLimit   int               `yaml:"group_limit"`
 	Labels       map[string]string `yaml:"labels"`
@@ -22,6 +25,52 @@ type EstimatorConfig struct {
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`
+}
+
+// labelFilter is a compiled label filter for fast matching.
+type labelFilter struct {
+	label      string
+	value      string
+	isNegative bool
+	isRegexp   bool
+	re         *regexp.Regexp // non-nil when isRegexp is true
+}
+
+func compileFilters(filter string) ([]labelFilter, error) {
+	if filter == "" {
+		return nil, nil
+	}
+	expr, err := metricsql.Parse(filter)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse filter %q: %w", filter, err)
+	}
+	me, ok := expr.(*metricsql.MetricExpr)
+	if !ok {
+		return nil, fmt.Errorf("filter %q must be a metric selector, got %T", filter, expr)
+	}
+	if len(me.LabelFilterss) == 0 {
+		return nil, nil
+	}
+	// Use the first group of label filters (OR-groups are not supported).
+	lfs := me.LabelFilterss[0]
+	result := make([]labelFilter, 0, len(lfs))
+	for _, lf := range lfs {
+		f := labelFilter{
+			label:      lf.Label,
+			value:      lf.Value,
+			isNegative: lf.IsNegative,
+			isRegexp:   lf.IsRegexp,
+		}
+		if lf.IsRegexp {
+			re, err := regexp.Compile("^(?:" + lf.Value + ")$")
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile regexp %q in filter %q: %w", lf.Value, filter, err)
+			}
+			f.re = re
+		}
+		result = append(result, f)
+	}
+	return result, nil
 }
 
 func loadConfig(path string) ([]*estimator, error) {

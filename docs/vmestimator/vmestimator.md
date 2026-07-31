@@ -121,6 +121,17 @@ streams:
     # default: 5m
     interval: <duration>
 
+    # Optional. MetricsQL label selector used to pre-filter time series before counting.
+    # Only series matching all matchers are counted. Supports equality (=), negative equality (!=),
+    # regexp (=~), and negative regexp (!~) matchers.
+    # Examples:
+    #  - '{job="api"}'                       — only series with job="api"
+    #  - '{env!="dev"}'                       — exclude dev environment
+    #  - '{job=~"api|worker",env!~"dev|staging"}' — regexp and negative regexp combined
+    #
+    # default: none (all series are counted)
+    filter: '<MetricsQL selector>'
+
     # Optional. Label names used to split the cardinality estimate into per-combination groups.
     # Each distinct combination of values for these labels gets its own estimate metric.
     # Omit entirely for a single global estimate across all series.
@@ -238,6 +249,23 @@ Per tenant cardinality:
 
 - interval: '5m'
   group_by: ['vm_account_id', 'vm_project_id']
+```
+
+Cardinality scoped to a single job:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  filter: '{job="api"}'
+  group_by: ['__name__']
+```
+
+Cardinality excluding non-production environments:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  filter: '{env!~"dev|staging"}'
 ```
 
 ### Churn calculation

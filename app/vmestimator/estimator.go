@@ -23,6 +23,7 @@ import (
 )
 
 type estimator struct {
+	filters          []labelFilter
 	groupBy          []string
 	groupByKeysLabel string
 	groupSize        *groupSize
@@ -53,7 +54,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		cfg.HLLSparse = new(true)
 	}
 
-	metricPrefix := fmt.Sprintf("cardinality_estimate{interval=%q", cfg.Interval)
+	metricPrefix := fmt.Sprintf("cardinality_estimate{interval=%q,filter=%q", cfg.Interval, cfg.Filter)
 	if len(cfg.Labels) > 0 {
 		keys := make([]string, 0, len(cfg.Labels))
 		for k := range cfg.Labels {
@@ -76,7 +77,13 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		groupByKeysLabel = strings.Join(cfg.GroupBy, `,`)
 	}
 
+	filters, err := compileFilters(cfg.Filter)
+	if err != nil {
+		return nil, fmt.Errorf("cannot compile filters for estimator: %w", err)
+	}
+
 	e := &estimator{
+		filters:          filters,
 		groupBy:          cfg.GroupBy,
 		groupByKeysLabel: groupByKeysLabel,
 		groupSize: &groupSize{
@@ -164,16 +171,21 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	bucketsNum := uint64(len(e.buckets))
 
 	if len(e.groupBy) == 0 {
+		var cnt int
 		tssLen := uint32(len(tss))
 		start := fastrand.Uint32n(tssLen)
 		for j := uint32(0); j < tssLen; j++ {
 			i := (start + j) % tssLen
 
 			ts := tss[i]
+			if !matchesFilters(ts.Labels, e.filters) {
+				continue
+			}
 			bi := int(ts.Fingerprint % bucketsNum)
 			e.buckets[bi].insert(ts, "", nil)
+			cnt++
 		}
-		e.insertTotal.Add(len(tss))
+		e.insertTotal.Add(cnt)
 		return
 	}
 
@@ -193,6 +205,9 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		i := (start + j) % tssLen
 
 		ts := tss[i]
+		if !matchesFilters(ts.Labels, e.filters) {
+			continue
+		}
 
 		groupValuesKey = groupValuesKey[:0]
 		clear(groupValues)
@@ -592,6 +607,36 @@ func mustNewSketch(precision uint8, sparse bool) *hyperloglog.Sketch {
 
 func hash(v []byte) uint64 {
 	return metro.Hash64(v, 1337)
+}
+
+// matchesFilters returns true if all filters are satisfied by labels.
+// It returns true immediately when filters is empty (fast path).
+func matchesFilters(labels []protoparser.Label, filters []labelFilter) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	for _, f := range filters {
+		val := ""
+		for _, l := range labels {
+			if l.Name == f.label {
+				val = l.Value
+				break
+			}
+		}
+		var matched bool
+		if f.isRegexp {
+			matched = f.re.MatchString(val)
+		} else {
+			matched = val == f.value
+		}
+		if f.isNegative {
+			matched = !matched
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
 }
 
 // appendGlobalMetric produces:
