@@ -192,15 +192,15 @@ All metrics include `interval`, `group_by_keys`, `group_by_values`, and any stat
 
 For global estimates (no `group_by` configured), `group_by_keys` is `__global__` and `group_by_values` is omitted:
 ```
-cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 142300
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__global__"} 142300
 ```
 
 For grouped estimates, one summary line shows the total number of distinct groups `group_by_keys="__group__"`, followed by one line per distinct label value combination.
 Each per-group line also includes individual `by_{key}="{val}"` labels:
 ```
-cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="instance,job"} 2
-cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
-cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="instance,job"} 2
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
 ```
 
 > Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached
@@ -418,13 +418,13 @@ max(cardinality_estimate) without (instance)
 
 When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
 
-- `vmestimator_estimator_group_size{group_by_keys, bucket}` — number of active groups in this bucket after the last rotation
-- `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
-- `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
+- `vmestimator_estimator_group_size{group_by_keys, interval, filter}` — number of active groups in this bucket after the last rotation
+- `vmestimator_estimator_group_rejected_size{group_by_keys, interval, filter}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
+- `vmestimator_estimator_group_limit{group_by_keys, interval, filter}` — configured `group_limit` for this bucket
 
 Additionally, every stream (including non-grouped ones) exposes:
 
-- `vmestimator_estimator_insert_total{group_by_keys, interval}` — total number of samples inserted into this stream's estimator
+- `vmestimator_estimator_insert_total{group_by_keys, interval, filter}` — total number of samples inserted into this stream's estimator (only counts series that passed the `filter`)
 
 
 ## Dashboards
