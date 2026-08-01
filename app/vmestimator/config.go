@@ -102,7 +102,7 @@ func compileFilters(filter string) (compiledFilter, error) {
 			isRegexp:   lf.IsRegexp,
 		}
 		if lf.IsRegexp {
-			re, err := regexp.Compile("^(?:" + lf.Value + ")$")
+			re, err := metricsql.CompileRegexpAnchored(lf.Value)
 			if err != nil {
 				return nil, fmt.Errorf("cannot compile regexp %q in filter %q: %w", lf.Value, filter, err)
 			}
