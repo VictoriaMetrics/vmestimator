@@ -51,7 +51,9 @@ func compileFilters(filter string) ([]labelFilter, error) {
 	if len(me.LabelFilterss) == 0 {
 		return nil, nil
 	}
-	// Use the first group of label filters (OR-groups are not supported).
+	if len(me.LabelFilterss) > 1 {
+		return nil, fmt.Errorf("filter %q must not contain OR groups; got %d groups", filter, len(me.LabelFilterss))
+	}
 	lfs := me.LabelFilterss[0]
 	result := make([]labelFilter, 0, len(lfs))
 	for _, lf := range lfs {

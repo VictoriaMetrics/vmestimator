@@ -58,6 +58,8 @@ func TestCompileFilters(t *testing.T) {
 	f(`{job=~"[invalid"}`, true, nil)
 	// invalid selector → error
 	f(`not valid selector(`, true, nil)
+	// OR groups → error
+	f(`{job="api"} or {job="worker"}`, true, nil)
 }
 
 func TestMatchesFilters(t *testing.T) {
