@@ -25,7 +25,7 @@ func (ss *snapshots) add(newS *snapshot) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	key := newS.GroupByKeysLabel + "\x00" + newS.Interval.String()
+	key := newS.GroupByKeysLabel + "\x00" + newS.Filter + "\x00" + newS.Interval.String()
 	if s, found := ss.m[key]; found {
 		s.merge(newS)
 		return
@@ -90,6 +90,9 @@ func (s *snapshot) merge(other *snapshot) {
 	}
 	if s.Interval != 0 && s.Interval != other.Interval {
 		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
+	}
+	if s.Filter != "" && s.Filter != other.Filter {
+		logger.Panicf("BUG: merge snapshots must have the same filter; s: %s; other: %s", s.Filter, other.Filter)
 	}
 
 	for name, otherSK := range other.Sketches {
