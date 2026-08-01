@@ -379,6 +379,67 @@ func TestGroupSnapshot(t *testing.T) {
 	f([]string{"foo"}, genSpecialCard("a\tb"))
 }
 
+func TestSnapshotsAdd(t *testing.T) {
+	makeSnapshot := func(groupByKeysLabel string, interval time.Duration) *snapshot {
+		s := newSnapshot()
+		s.GroupByKeysLabel = groupByKeysLabel
+		s.Interval = interval
+		s.MetricPrefix = "vm_"
+		s.GroupBy = []string{"foo"}
+		return s
+	}
+
+	f := func(inputs []*snapshot, wantLen int) {
+		t.Helper()
+		ss := newSnapshots()
+		for _, s := range inputs {
+			ss.add(s)
+		}
+		if len(ss.m) != wantLen {
+			t.Fatalf("expected %d entries in snapshots map, got %d", wantLen, len(ss.m))
+		}
+	}
+
+	// same group_by keys, same interval => merged into one
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+	}, 1)
+
+	// same group_by keys, different interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="a"`, 10*time.Minute),
+	}, 2)
+
+	// different group_by keys, same interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="b"`, 5*time.Minute),
+	}, 2)
+
+	// different group_by keys, different interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="b"`, 10*time.Minute),
+	}, 2)
+
+	// three snapshots: two share keys+interval, third differs only by interval
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="a"`, 10*time.Minute),
+	}, 2)
+
+	// all distinct
+	f([]*snapshot{
+		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot(`foo="b"`, 5*time.Minute),
+		makeSnapshot(`foo="a"`, 10*time.Minute),
+		makeSnapshot(`foo="b"`, 10*time.Minute),
+	}, 4)
+}
+
 func TestGroupSnapshotGroupLimit(t *testing.T) {
 	makeTS := func(fooVal string) protoparser.TimeSerie {
 		return protoparser.TimeSerie{

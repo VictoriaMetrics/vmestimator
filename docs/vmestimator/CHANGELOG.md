@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): fix snapshot merging collision when multiple estimators share the same `group_by` keys but use different `interval` values. Previously, snapshots from such estimators were incorrectly merged into a single entry, causing the interval of one to overwrite the other. See [dea7b6d3](https://github.com/VictoriaMetrics/vmestimator/commit/dea7b6d3cec8).
+
 ## [v0.1.8](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.8)
 
 Released at 2026-07-17
