@@ -25,7 +25,7 @@ func (ss *snapshots) add(newS *snapshot) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	key := newS.GroupByKeysLabel
+	key := newS.GroupByKeysLabel + "\x00" + newS.Interval.String()
 	if s, found := ss.m[key]; found {
 		s.merge(newS)
 		return
@@ -87,6 +87,9 @@ func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
 func (s *snapshot) merge(other *snapshot) {
 	if s.GroupByKeysLabel != "" && s.GroupByKeysLabel != other.GroupByKeysLabel {
 		logger.Panicf("BUG: merge snapshots must have the same groupByKeysLabel; s: %s; other: %s", s.GroupByKeysLabel, other.GroupByKeysLabel)
+	}
+	if s.Interval != 0 && s.Interval != other.Interval {
+		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
 	}
 
 	for name, otherSK := range other.Sketches {

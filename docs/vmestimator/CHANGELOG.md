@@ -18,6 +18,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `filter` field to stream configuration for filtering time series by label matchers before counting. Supports equality (`=`), negative equality (`!=`), regexp (`=~`), and negative regexp (`!~`) matchers in MetricsQL selector syntax, e.g. `{job="api",env!~"dev|staging"}`. See [#29](https://github.com/VictoriaMetrics/vmestimator/pull/29).
 
+* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): fix snapshot merging collision when multiple estimators share the same `group_by` keys but use different `interval` values. Previously, snapshots from such estimators were incorrectly merged into a single entry, causing the interval of one to overwrite the other.
+
 ## [v0.1.8](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.8)
 
 Released at 2026-07-17
