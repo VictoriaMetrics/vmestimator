@@ -23,7 +23,8 @@ import (
 )
 
 type estimator struct {
-	filters          []labelFilter
+	compiledFilter compiledFilter
+
 	groupBy          []string
 	groupByKeysLabel string
 	groupSize        *groupSize
@@ -77,13 +78,13 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		groupByKeysLabel = strings.Join(cfg.GroupBy, `,`)
 	}
 
-	filters, err := compileFilters(cfg.Filter)
+	cf, err := compileFilters(cfg.Filter)
 	if err != nil {
 		return nil, fmt.Errorf("cannot compile filters for estimator: %w", err)
 	}
 
 	e := &estimator{
-		filters:          filters,
+		compiledFilter:   cf,
 		groupBy:          cfg.GroupBy,
 		groupByKeysLabel: groupByKeysLabel,
 		groupSize: &groupSize{
@@ -97,15 +98,16 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q,interval=%q,filter=%q}`, e.groupByKeysLabel, cfg.Interval, cfg.Filter),
 	)
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q,filter=%q}`, e.groupByKeysLabel, cfg.Interval, cfg.Filter), func() float64 {
 		return float64(e.groupSize.totalRejected())
 	})
 
 	for i := 0; i < len(e.buckets); i++ {
 		eb := &estimatorBucket{
 			idx:              i,
+			filter:           cfg.Filter,
 			groupSize:        e.groupSize,
 			groupBy:          cfg.GroupBy,
 			extraLabels:      cfg.Labels,
@@ -127,10 +129,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		e.buckets[i] = eb
 	}
 
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{group_by_keys=%q,interval=%q,filter=%q}`, e.groupByKeysLabel, cfg.Interval, cfg.Filter), func() float64 {
 		return float64(e.groupSize.limit)
 	})
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{group_by_keys=%q,interval=%q,filter=%q}`, e.groupByKeysLabel, cfg.Interval, cfg.Filter), func() float64 {
 		return float64(e.groupSize.totalSize())
 	})
 
@@ -178,7 +180,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			i := (start + j) % tssLen
 
 			ts := tss[i]
-			if !matchesFilters(ts.Labels, e.filters) {
+			if !e.compiledFilter.match(ts.Labels) {
 				continue
 			}
 			bi := int(ts.Fingerprint % bucketsNum)
@@ -205,7 +207,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		i := (start + j) % tssLen
 
 		ts := tss[i]
-		if !matchesFilters(ts.Labels, e.filters) {
+		if !e.compiledFilter.match(ts.Labels) {
 			continue
 		}
 
@@ -284,7 +286,7 @@ func (e *estimator) writeMetrics(w io.Writer) {
 	}
 
 	formatBuf = formatBuf[:0]
-	formatBuf = appendGroupLimitMetric(formatBuf, eb0.groupByKeysLabel, eb0.interval)
+	formatBuf = appendGroupLimitMetric(formatBuf, eb0.groupByKeysLabel, eb0.interval, eb0.filter)
 	formatBuf = strconv.AppendInt(formatBuf, eb0.groupSize.limit, 10)
 	formatBuf = append(formatBuf, "\n"...)
 	if _, err := w.Write(formatBuf); err != nil {
@@ -348,6 +350,7 @@ type estimatorBucket struct {
 	mu sync.Mutex
 
 	idx              int
+	filter           string
 	groupBy          []string
 	extraLabels      map[string]string
 	interval         time.Duration
@@ -609,36 +612,6 @@ func hash(v []byte) uint64 {
 	return metro.Hash64(v, 1337)
 }
 
-// matchesFilters returns true if all filters are satisfied by labels.
-// It returns true immediately when filters is empty (fast path).
-func matchesFilters(labels []protoparser.Label, filters []labelFilter) bool {
-	if len(filters) == 0 {
-		return true
-	}
-	for _, f := range filters {
-		val := ""
-		for _, l := range labels {
-			if l.Name == f.label {
-				val = l.Value
-				break
-			}
-		}
-		var matched bool
-		if f.isRegexp {
-			matched = f.re.MatchString(val)
-		} else {
-			matched = val == f.value
-		}
-		if f.isNegative {
-			matched = !matched
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
-}
-
 // appendGlobalMetric produces:
 // 'cardinality_estimate{interval="5m",group_by_keys="__global__"} '
 func appendGlobalMetric(buf []byte, metricPrefix string) []byte {
@@ -658,12 +631,14 @@ func appendGroupMetric(buf []byte, metricPrefix, groupByKeysLabel string) []byte
 }
 
 // appendGroupLimitMetric produces:
-// 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
-func appendGroupLimitMetric(buf []byte, groupByKeysLabel string, interval time.Duration) []byte {
+// 'vmestimator_estimator_group_limit{interval="5m",filter="",group_by_keys="__group__",group_by_values="fooKey,barKey"} '
+func appendGroupLimitMetric(buf []byte, groupByKeysLabel string, interval time.Duration, filter string) []byte {
 	buf = buf[:0]
 	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
 	buf = append(buf, interval.String()...)
-	buf = append(buf, `",group_by_keys="__group__",group_by_values="`...)
+	buf = append(buf, `",filter=`...)
+	buf = strconv.AppendQuote(buf, filter)
+	buf = append(buf, `,group_by_keys="__group__",group_by_values="`...)
 	buf = append(buf, groupByKeysLabel...)
 	buf = append(buf, `"} `...)
 	return buf

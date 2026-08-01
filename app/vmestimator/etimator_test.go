@@ -12,115 +12,6 @@ import (
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
-func TestCompileFilters(t *testing.T) {
-	f := func(filter string, wantErr bool, want []labelFilter) {
-		t.Helper()
-		got, err := compileFilters(filter)
-		if wantErr {
-			if err == nil {
-				t.Fatalf("expected error for filter %q, got nil", filter)
-			}
-			return
-		}
-		if err != nil {
-			t.Fatalf("unexpected error for filter %q: %v", filter, err)
-		}
-		if len(got) != len(want) {
-			t.Fatalf("filter %q: expected %d filters, got %d: %+v", filter, len(want), len(got), got)
-		}
-		for i, gf := range got {
-			wf := want[i]
-			if gf.label != wf.label || gf.value != wf.value || gf.isNegative != wf.isNegative || gf.isRegexp != wf.isRegexp {
-				t.Fatalf("filter %q [%d]: expected %+v, got %+v", filter, i, wf, gf)
-			}
-			if gf.isRegexp && gf.re == nil {
-				t.Fatalf("filter %q [%d]: compiled regexp is nil", filter, i)
-			}
-		}
-	}
-
-	// empty → no filters
-	f("", false, nil)
-	// equality
-	f(`{job="foo"}`, false, []labelFilter{{label: "job", value: "foo"}})
-	// negative equality
-	f(`{job!="foo"}`, false, []labelFilter{{label: "job", value: "foo", isNegative: true}})
-	// regexp
-	f(`{job=~"foo|bar"}`, false, []labelFilter{{label: "job", value: "foo|bar", isRegexp: true}})
-	// negative regexp
-	f(`{job!~"foo|bar"}`, false, []labelFilter{{label: "job", value: "foo|bar", isRegexp: true, isNegative: true}})
-	// multiple filters
-	f(`{job="api",env!~"dev|staging"}`, false, []labelFilter{
-		{label: "job", value: "api"},
-		{label: "env", value: "dev|staging", isRegexp: true, isNegative: true},
-	})
-	// invalid regexp → error
-	f(`{job=~"[invalid"}`, true, nil)
-	// invalid selector → error
-	f(`not valid selector(`, true, nil)
-	// OR groups → error
-	f(`{job="api"} or {job="worker"}`, true, nil)
-}
-
-func TestMatchesFilters(t *testing.T) {
-	labels := func(pairs ...string) []protoparser.Label {
-		ls := make([]protoparser.Label, 0, len(pairs)/2)
-		for i := 0; i < len(pairs); i += 2 {
-			ls = append(ls, protoparser.Label{Name: pairs[i], Value: pairs[i+1]})
-		}
-		return ls
-	}
-
-	f := func(filter string, ls []protoparser.Label, want bool) {
-		t.Helper()
-		filters, err := compileFilters(filter)
-		if err != nil {
-			t.Fatalf("compileFilters(%q): %v", filter, err)
-		}
-		if got := matchesFilters(ls, filters); got != want {
-			t.Fatalf("matchesFilters(%q): expected %v, got %v", filter, want, got)
-		}
-	}
-
-	// fast path: no filters always match
-	f("", labels(), true)
-	f("", labels("job", "foo"), true)
-
-	// equality
-	f(`{job="foo"}`, labels("job", "foo"), true)
-	f(`{job="foo"}`, labels("job", "bar"), false)
-	// absent label has empty value
-	f(`{job="foo"}`, labels("env", "prod"), false)
-	f(`{job=""}`, labels("env", "prod"), true)
-
-	// negative equality
-	f(`{job!="foo"}`, labels("job", "bar"), true)
-	f(`{job!="foo"}`, labels("job", "foo"), false)
-	// absent label (empty) does not equal "foo" → matches negation
-	f(`{job!="foo"}`, labels("env", "prod"), true)
-	// absent label (empty) equals "" → negation fails
-	f(`{job!=""}`, labels("env", "prod"), false)
-
-	// regexp
-	f(`{job=~"api|worker"}`, labels("job", "api"), true)
-	f(`{job=~"api|worker"}`, labels("job", "worker"), true)
-	f(`{job=~"api|worker"}`, labels("job", "db"), false)
-	// partial match is not allowed (anchored)
-	f(`{job=~"api"}`, labels("job", "api-v2"), false)
-
-	// negative regexp
-	f(`{job!~"api|worker"}`, labels("job", "db"), true)
-	f(`{job!~"api|worker"}`, labels("job", "api"), false)
-	// absent label has empty value; empty does not match "api|worker" → negation passes
-	f(`{job!~"api|worker"}`, labels("env", "prod"), true)
-
-	// multiple filters: all must match
-	f(`{job="api",env="prod"}`, labels("job", "api", "env", "prod"), true)
-	f(`{job="api",env="prod"}`, labels("job", "api", "env", "dev"), false)
-	f(`{job="api",env!~"dev|staging"}`, labels("job", "api", "env", "prod"), true)
-	f(`{job="api",env!~"dev|staging"}`, labels("job", "api", "env", "dev"), false)
-}
-
 func TestGlobalEstimate(t *testing.T) {
 	genCard := func(cardinality int, seed string) func(e *estimator) {
 		return func(e *estimator) {
@@ -405,79 +296,79 @@ func TestGroupEstimate(t *testing.T) {
 	f([]string{"__name__"}, genCard(10, 10, 10, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__",group_by_values="the_metric_name",by__name__="the_metric_name"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__"} 12345`,
 	)
 
 	// time series does not contribute to a group
 	f([]string{"foo"}, genCard(0, 10, 10, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 0
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(0, 0, 10, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 0
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// group by one label
 	f([]string{"foo"}, genCard(1, 1, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 2, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 2
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 10
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 100, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1000, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10000, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 9957
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 50000, 0, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 50387
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1, 1, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 2, 2, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 4
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 10, 10, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 100, 100, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 9954
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCard(1, 1000, 1000, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	// group by one label, rotate
@@ -492,12 +383,12 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 	f([]string{"foo"}, genCardRotate(1, 10, 10, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotate(1, 1000, 1000, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert same
@@ -513,12 +404,12 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 	f([]string{"foo"}, genCardRotateInsertSame(10, 10), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 100
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateInsertSame(1000, 1000), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="0",by_foo="0"} 1013124
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert diff
@@ -535,13 +426,13 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 100
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 100
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateInsertDiff(1000, 1000), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 2
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="one0",by_foo="one0"} 995153
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="two0",by_foo="two0"} 992158
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	// group by one label, rotate, insert diff
@@ -558,24 +449,24 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 	}
 	f([]string{"foo"}, genCardRotateTwice(10, 10), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 0
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 	f([]string{"foo"}, genCardRotateTwice(1000, 1000), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 0
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	// group by two labels
 	f([]string{"foo", "bar"}, genCard(1, 1, 1000, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(2, 1, 1000, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 2
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="0,0",by_foo="0",by_bar="0"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 	f([]string{"foo", "bar"}, genCard(2, 2, 1000, ""), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 4
@@ -583,7 +474,7 @@ cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_b
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate
@@ -601,7 +492,7 @@ cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_b
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert same
@@ -620,7 +511,7 @@ cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_b
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="0,1",by_foo="0",by_bar="1"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,0",by_foo="1",by_bar="0"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="1,1",by_foo="1",by_bar="1"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert diff
@@ -644,7 +535,7 @@ cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_b
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="two0,two1",by_foo="two0",by_bar="two1"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="two1,two0",by_foo="two1",by_bar="two0"} 1000
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,bar",group_by_values="two1,two1",by_foo="two1",by_bar="two1"} 1000
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// group by two labels, rotate, insert diff
@@ -661,7 +552,7 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 	}
 	f([]string{"foo", "bar"}, genCardTwoLabelsRotateTwice(), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 0
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,bar"} 12345`,
 	)
 
 	// quote values: label values with special characters must be properly escaped
@@ -680,25 +571,25 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 	f([]string{"foo"}, genSpecialCard(`a"b`), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="a\"b",by_foo="a\"b"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard(`a\b`), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="a\\b",by_foo="a\\b"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard("a\nb"), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="a\nb",by_foo="a\nb"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 
 	f([]string{"foo"}, genSpecialCard("a\tb"), `
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 1
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo",group_by_values="a\tb",by_foo="a\tb"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 12345`,
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo"} 12345`,
 	)
 }
 

@@ -51,6 +51,7 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 
 type snapshot struct {
 	MetricPrefix     string
+	Filter           string
 	Interval         time.Duration
 	GroupByKeysLabel string
 	RejectSize       int64
@@ -97,6 +98,7 @@ func (s *snapshot) merge(other *snapshot) {
 	}
 
 	s.Interval = other.Interval
+	s.Filter = other.Filter
 	s.MetricPrefix = other.MetricPrefix
 	s.GroupLimit = other.GroupLimit
 	s.GroupByKeysLabel = other.GroupByKeysLabel
@@ -131,7 +133,7 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 		}
 
 		formatBuf = formatBuf[:0]
-		formatBuf = appendGroupLimitMetric(formatBuf, s.GroupByKeysLabel, s.Interval)
+		formatBuf = appendGroupLimitMetric(formatBuf, s.GroupByKeysLabel, s.Interval, s.Filter)
 		formatBuf = strconv.AppendInt(formatBuf, s.GroupLimit, 10)
 		formatBuf = append(formatBuf, "\n"...)
 		if _, err := w.Write(formatBuf); err != nil {
@@ -144,6 +146,7 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 
 func (s *snapshot) reset() {
 	s.GroupLimit = 0
+	s.Filter = ""
 	s.GroupByKeysLabel = ""
 	s.RejectSize = 0
 	s.MetricPrefix = ""
@@ -171,6 +174,7 @@ func convertNoGroupToSnapshot(e *estimator, s *snapshot) *snapshot {
 	formatBuf := make([]byte, 0, 1024)
 	formatBuf = appendGlobalMetric(formatBuf, eb0.metricPrefix)
 	s.Sketches[string(formatBuf)] = resSK
+	s.Filter = eb0.filter
 	s.GroupByKeysLabel = eb0.groupByKeysLabel
 	s.MetricPrefix = eb0.metricPrefix
 	s.GroupBy = append(s.GroupBy[:0], eb0.groupBy...)
@@ -231,6 +235,7 @@ func convertGroupBucketToSnapshot(eb *estimatorBucket, s *snapshot, formatBuf []
 	}
 
 	s.GroupLimit = eb.groupSize.limit
+	s.Filter = eb.filter
 	s.GroupByKeysLabel = eb.groupByKeysLabel
 	s.MetricPrefix = eb.metricPrefix
 	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)

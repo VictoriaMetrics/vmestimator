@@ -9,6 +9,7 @@ import (
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metricsql"
+	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,7 +37,44 @@ type labelFilter struct {
 	re         *regexp.Regexp // non-nil when isRegexp is true
 }
 
-func compileFilters(filter string) ([]labelFilter, error) {
+func loadConfig(path string) ([]*estimator, error) {
+	if path == "" && len(*storageNodes) > 0 {
+		return nil, nil
+	}
+	if path == "" {
+		return nil, fmt.Errorf("either -config or -storageNode must be specified; see https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
+	}
+	var cfg Config
+	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
+		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
+	}
+	for _, stream := range cfg.Streams {
+		sort.Strings(stream.GroupBy)
+		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
+			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
+		}
+	}
+
+	es := make([]*estimator, 0, len(cfg.Streams))
+	for _, ec := range cfg.Streams {
+		e, err := newEstimator(ec)
+		if err != nil {
+			logger.Fatalf("cannot create estimator: %v", err)
+		}
+		es = append(es, e)
+	}
+
+	return es, nil
+}
+
+type compiledFilter []labelFilter
+
+func compileFilters(filter string) (compiledFilter, error) {
 	if filter == "" {
 		return nil, nil
 	}
@@ -75,37 +113,32 @@ func compileFilters(filter string) ([]labelFilter, error) {
 	return result, nil
 }
 
-func loadConfig(path string) ([]*estimator, error) {
-	if path == "" && len(*storageNodes) > 0 {
-		return nil, nil
+// matchesFilters returns true if all filters are satisfied by labels.
+// It returns true immediately when filters is empty (fast path).
+func (cf compiledFilter) match(labels []protoparser.Label) bool {
+	if len(cf) == 0 {
+		return true
 	}
-	if path == "" {
-		return nil, fmt.Errorf("either -config or -storageNode must be specified; see https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example")
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
-	}
-	var cfg Config
-	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
-		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
-	}
-	for _, stream := range cfg.Streams {
-		sort.Strings(stream.GroupBy)
-		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
-			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
+	for _, f := range cf {
+		val := ""
+		for _, l := range labels {
+			if l.Name == f.label {
+				val = l.Value
+				break
+			}
+		}
+		var matched bool
+		if f.isRegexp {
+			matched = f.re.MatchString(val)
+		} else {
+			matched = val == f.value
+		}
+		if f.isNegative {
+			matched = !matched
+		}
+		if !matched {
+			return false
 		}
 	}
-
-	es := make([]*estimator, 0, len(cfg.Streams))
-	for _, ec := range cfg.Streams {
-		e, err := newEstimator(ec)
-		if err != nil {
-			logger.Fatalf("cannot create estimator: %v", err)
-		}
-		es = append(es, e)
-	}
-
-	return es, nil
+	return true
 }
