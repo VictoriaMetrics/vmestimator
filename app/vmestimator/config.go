@@ -28,15 +28,6 @@ type EstimatorConfig struct {
 	HLLSparse    *bool             `yaml:"hll_sparse"`
 }
 
-// labelFilter is a compiled label filter for fast matching.
-type labelFilter struct {
-	label      string
-	value      string
-	isNegative bool
-	isRegexp   bool
-	re         *regexp.Regexp // non-nil when isRegexp is true
-}
-
 func loadConfig(path string) ([]*estimator, error) {
 	if path == "" && len(*storageNodes) > 0 {
 		return nil, nil
@@ -73,6 +64,15 @@ func loadConfig(path string) ([]*estimator, error) {
 }
 
 type compiledFilter []labelFilter
+
+// labelFilter is a compiled label filter for fast matching.
+type labelFilter struct {
+	label      string
+	value      string
+	isNegative bool
+	isRegexp   bool
+	re         *regexp.Regexp // non-nil when isRegexp is true
+}
 
 func compileFilters(filter string) (compiledFilter, error) {
 	if filter == "" {
