@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/axiomhq/hyperloglog"
+	"github.com/cespare/xxhash/v2"
 	"github.com/dgryski/go-metro"
 	"github.com/valyala/fastrand"
 
@@ -65,6 +66,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		}
 	}
 
+	if len(cfg.GroupBy) > 5 {
+		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
+	}
+
 	groupByKeysLabel := "__global__"
 	if len(cfg.GroupBy) > 0 {
 		for _, k := range cfg.GroupBy {
@@ -113,8 +118,8 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		if len(cfg.GroupBy) == 0 {
 			eb.sketch = eb.newSketch()
 		} else {
-			eb.groups = make(map[string]groupSketch)
-			eb.prevGroups = make(map[string]groupSketch)
+			eb.groups = make(map[Values]groupSketch)
+			eb.prevGroups = make(map[Values]groupSketch)
 		}
 
 		e.buckets[i] = eb
@@ -144,7 +149,7 @@ var groupValuesPool = sync.Pool{}
 func getGroupValuesKeySlice() *[]byte {
 	v0 := groupValuesPool.Get()
 	if v0 == nil {
-		v := make([]byte, 128)
+		v := make([]byte, 0, 128)
 		return &v
 	}
 
@@ -171,22 +176,13 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 			ts := tss[i]
 			bi := int(ts.Fingerprint % bucketsNum)
-			e.buckets[bi].insert(ts, "", nil)
+			e.buckets[bi].insert(ts, Values{})
 		}
 		e.insertTotal.Add(len(tss))
 		return
 	}
 
 	var cnt int
-	groupValuesKeyP := getGroupValuesKeySlice()
-	groupValuesKey := *groupValuesKeyP
-	defer func() {
-		*groupValuesKeyP = groupValuesKey
-		putGroupValuesSlice(groupValuesKeyP)
-	}()
-
-	groupValues := make([]string, len(e.groupBy))
-
 	tssLen := uint32(len(tss))
 	start := fastrand.Uint32n(tssLen)
 	for j := uint32(0); j < tssLen; j++ {
@@ -194,20 +190,16 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 		ts := tss[i]
 
-		groupValuesKey = groupValuesKey[:0]
-		clear(groupValues)
+		groupValuesKey := Values{
+			cap: len(e.groupBy),
+		}
 		var hasNames bool
 		for i, labelName := range e.groupBy {
-			if i > 0 {
-				groupValuesKey = append(groupValuesKey, ',')
-			}
-
 			for _, l := range ts.Labels {
 				if l.Name == labelName {
 					hasNames = true
 
-					groupValuesKey = append(groupValuesKey, l.Value...)
-					groupValues[i] = l.Value
+					groupValuesKey.arr[i] = l.Value
 					break
 				}
 			}
@@ -218,8 +210,8 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			continue
 		}
 
-		bi := int(hash(groupValuesKey) % bucketsNum)
-		e.buckets[bi].insert(ts, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
+		bi := int(groupValuesKey.Hash() % bucketsNum)
+		e.buckets[bi].insert(ts, groupValuesKey)
 		cnt++
 	}
 
@@ -345,8 +337,8 @@ type estimatorBucket struct {
 	prevSketch *hyperloglog.Sketch
 
 	groupSize  *groupSize
-	groups     map[string]groupSketch
-	prevGroups map[string]groupSketch
+	groups     map[Values]groupSketch
+	prevGroups map[Values]groupSketch
 }
 
 func (eb *estimatorBucket) String() string {
@@ -364,8 +356,8 @@ func (eb *estimatorBucket) reset() {
 		return
 	}
 
-	eb.groups = make(map[string]groupSketch)
-	eb.prevGroups = make(map[string]groupSketch)
+	eb.groups = make(map[Values]groupSketch)
+	eb.prevGroups = make(map[Values]groupSketch)
 
 	eb.groupSize.rotateLocked(eb.idx, 0)
 }
@@ -381,12 +373,12 @@ func (eb *estimatorBucket) rotate() {
 
 	eb.mu.Lock()
 	eb.prevGroups = eb.groups
-	eb.groups = make(map[string]groupSketch, len(eb.groups))
+	eb.groups = make(map[Values]groupSketch, len(eb.groups))
 	eb.groupSize.rotateLocked(eb.idx, int64(len(eb.prevGroups)))
 	eb.mu.Unlock()
 }
 
-func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey string, groupValues []string) {
+func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey Values) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 
@@ -407,8 +399,12 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 		groupValueLabels := prevGSK.groupValueLabels
 		if len(groupValueLabels) == 0 {
 			formatBuf := make([]byte, 0, 1024)
-			formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey)
-			for i := range groupValues {
+			formatBuf = groupValuesKey.AppendQuote(formatBuf)
+			for i := 0; i < groupValuesKey.cap; i++ {
+				if groupValuesKey.arr[i] == "" {
+					break
+				}
+
 				formatBuf = append(formatBuf, ',')
 				if eb.groupBy[i] == `__name__` {
 					formatBuf = append(formatBuf, `by__name__`...)
@@ -417,7 +413,7 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 					formatBuf = append(formatBuf, eb.groupBy[i]...)
 				}
 				formatBuf = append(formatBuf, '=')
-				formatBuf = strconv.AppendQuote(formatBuf, groupValues[i])
+				formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey.arr[i])
 			}
 			formatBuf = append(formatBuf, `} `...)
 
@@ -430,7 +426,7 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 			Sketch: eb.newSketch(),
 		}
 
-		eb.groups[strings.Clone(groupValuesKey)] = gsk
+		eb.groups[groupValuesKey.Clone()] = gsk
 	}
 	gsk.InsertHash(ts.Fingerprint)
 }
@@ -514,7 +510,7 @@ type groupSize struct {
 }
 
 // allowInsertLocked must be called under estimatorBucket lock
-func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey string) bool {
+func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey Values) bool {
 	if gs.size.Load() >= gs.limit {
 		gs.rejectMu.Lock()
 		sk := gs.rejectSketches[bucketIdx]
@@ -522,7 +518,7 @@ func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey string) boo
 			sk = mustNewGroupRejectSketch()
 			gs.rejectSketches[bucketIdx] = sk
 		}
-		sk.InsertHash(hash([]byte(groupValuesKey)))
+		sk.InsertHash(groupValuesKey.Hash())
 		gs.rejectMu.Unlock()
 		return false
 	}
@@ -633,3 +629,71 @@ func appendGroupByKeysAndValuesPrefix(buf []byte, metricPrefix, groupByKeysLabel
 	buf = append(buf, `",group_by_values=`...)
 	return buf
 }
+
+type Values struct {
+	cap int
+	arr [10]string
+
+	hash uint64
+}
+
+func (vs Values) Hash() uint64 {
+	if vs.hash > 0 {
+		return vs.hash
+	}
+
+	h := getHasher()
+	defer putHasher(h)
+
+	for i := 0; i < vs.cap; i++ {
+		_, _ = h.Write(bytesutil.ToUnsafeBytes(vs.arr[i]))
+	}
+	vs.hash = h.Sum64()
+	return vs.hash
+}
+
+func (vs Values) Clone() Values {
+	ck := Values{
+		cap: vs.cap,
+	}
+
+	for i := 0; i < vs.cap; i++ {
+		ck.arr[i] = strings.Clone(vs.arr[i])
+	}
+
+	return ck
+}
+
+func (vs Values) AppendQuote(b []byte) []byte {
+	groupValuesKeyP := getGroupValuesKeySlice()
+	groupValuesKey := *groupValuesKeyP
+	defer func() {
+		*groupValuesKeyP = groupValuesKey
+		putGroupValuesSlice(groupValuesKeyP)
+	}()
+
+	for i := 0; i < vs.cap; i++ {
+		if i > 0 {
+			groupValuesKey = append(groupValuesKey, ',')
+		}
+
+		groupValuesKey = append(groupValuesKey, []byte(vs.arr[i])...)
+	}
+
+	return strconv.AppendQuote(b, bytesutil.ToUnsafeString(groupValuesKey))
+}
+
+func getHasher() *xxhash.Digest {
+	v := hasherPool.Get()
+	if v == nil {
+		return xxhash.New()
+	}
+	return v.(*xxhash.Digest)
+}
+
+func putHasher(h *xxhash.Digest) {
+	h.Reset()
+	hasherPool.Put(h)
+}
+
+var hasherPool sync.Pool
