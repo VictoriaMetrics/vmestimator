@@ -382,9 +382,7 @@ func TestGroupSnapshot(t *testing.T) {
 func TestSnapshotsAdd(t *testing.T) {
 	makeSnapshot := func(groupByKeysLabel string, interval time.Duration) *snapshot {
 		s := newSnapshot()
-		s.GroupByKeysLabel = groupByKeysLabel
 		s.Interval = interval
-		s.MetricPrefix = "vm_"
 		s.GroupBy = []string{"foo"}
 		return s
 	}

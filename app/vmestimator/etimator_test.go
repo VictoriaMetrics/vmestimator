@@ -628,6 +628,118 @@ func TestGroupEstimateGroupLimit(t *testing.T) {
 	)
 }
 
+func TestLabelKeywordEstimate(t *testing.T) {
+	makeLabel := func(name, value string) protoparser.Label {
+		return protoparser.Label{
+			Name:        name,
+			Value:       value,
+			Fingerprint: hash([]byte(value)),
+		}
+	}
+
+	f := func(groupBy []string, gen func(e *estimator), expMetrics string) {
+		t.Helper()
+
+		cfg := EstimatorConfig{
+			Interval:   time.Hour,
+			GroupBy:    groupBy,
+			GroupLimit: 12345,
+			Buckets:    5,
+		}
+
+		e, err := newEstimator(cfg)
+		if err != nil {
+			t.Fatalf("failed to create new estimator: %v", err)
+		}
+		defer e.stop()
+
+		gen(e)
+
+		buf := bytes.NewBuffer(nil)
+		e.writeMetrics(buf)
+		assertMetricsSame(t, "", expMetrics, buf.String())
+	}
+
+	// pure __label__: counts unique values per label name across all series
+	f([]string{"__label__"}, func(e *estimator) {
+		e.insertMany([]protoparser.TimeSerie{
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "m1"),
+				makeLabel("foo", "f1"),
+				makeLabel("bar", "b1"),
+			}},
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "m2"),
+				makeLabel("foo", "f1"),
+				makeLabel("bar", "b1"),
+			}},
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "m3"),
+				makeLabel("foo", "f2"),
+				makeLabel("bar", "b1"),
+			}},
+		})
+	}, `
+cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="__label__"} 3
+cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 3
+cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="foo",by__label__="foo"} 2
+cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="bar",by__label__="bar"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__label__"} 12345`,
+	)
+
+	// __name__ + __label__: one sketch per (metric_name, label_name) pair
+	// GroupBy passed already sorted with __label__ last (as loadConfig would produce)
+	f([]string{"__name__", "__label__"}, func(e *estimator) {
+		e.insertMany([]protoparser.TimeSerie{
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "metric_a"),
+				makeLabel("foo", "f1"),
+				makeLabel("bar", "b1"),
+			}},
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "metric_a"),
+				makeLabel("foo", "f2"),
+				makeLabel("bar", "b1"),
+			}},
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "metric_b"),
+				makeLabel("foo", "f1"),
+			}},
+		})
+	}, `
+cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__,__label__"} 5
+cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,__name__",by__name__="metric_a",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,foo",by__name__="metric_a",by__label__="foo"} 2
+cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,bar",by__name__="metric_a",by__label__="bar"} 1
+cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_b,__name__",by__name__="metric_b",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_b,foo",by__name__="metric_b",by__label__="foo"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__,__label__"} 12345`,
+	)
+
+	// series missing an explicit group-by label are skipped entirely
+	f([]string{"foo", "__label__"}, func(e *estimator) {
+		e.insertMany([]protoparser.TimeSerie{
+			// has foo — contributes
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "m1"),
+				makeLabel("foo", "f1"),
+				makeLabel("bar", "b1"),
+			}},
+			// no foo — skipped
+			{Labels: []protoparser.Label{
+				makeLabel("__name__", "m2"),
+				makeLabel("bar", "b2"),
+			}},
+		})
+	}, `
+cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,__label__"} 3
+cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,__name__",by_foo="f1",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,foo",by_foo="f1",by__label__="foo"} 1
+cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,bar",by_foo="f1",by__label__="bar"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,__label__"} 12345`,
+	)
+}
+
 func TestNewEstimatorFail(t *testing.T) {
 	f := func(cfg EstimatorConfig, expErr string) {
 		t.Helper()
