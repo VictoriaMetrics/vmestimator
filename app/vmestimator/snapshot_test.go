@@ -55,10 +55,10 @@ func TestGlobalSnapshot(t *testing.T) {
 		expMetric := buf.String()
 
 		buf.Reset()
-		if err := convertNoGroupToSnapshot(e, nil).writeMetrics(buf); err != nil {
-			t.Fatalf("convertNoGroupToSnapshot: %v", err)
+		if err := convertGlobalEstimatorToSnapshot(e, nil).writeCardinalityEstimates(buf); err != nil {
+			t.Fatalf("convertGlobalEstimatorToSnapshot: %v", err)
 		}
-		assertMetricsSame(t, "convertNoGroupToSnapshot", expMetric, buf.String())
+		assertMetricsSame(t, "convertGlobalEstimatorToSnapshot", expMetric, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
@@ -217,7 +217,7 @@ func TestGroupSnapshot(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		if err := convertGroupToSnapshot(e, nil).writeMetrics(buf); err != nil {
+		if err := convertGroupToSnapshot(e, nil).writeCardinalityEstimates(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
@@ -472,7 +472,7 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 
 		buf.Reset()
 		s := convertGroupToSnapshot(e, nil)
-		if err := s.writeMetrics(buf); err != nil {
+		if err := s.writeCardinalityEstimates(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"testing"
 	"time"
 
@@ -18,10 +17,13 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		defer e.stop()
 		insertSeriesIntoEstimator(e, 5_000, 0)
 
+		s := newSnapshot()
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			s.reset()
+			convertGlobalEstimatorToSnapshot(e, s)
 		}
 	})
 
@@ -37,10 +39,13 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		}
 		insertSeriesIntoEstimator(e, 5_000, 0)
 
+		s := newSnapshot()
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			s.reset()
+			convertGlobalEstimatorToSnapshot(e, s)
 		}
 	})
 
@@ -55,10 +60,19 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		defer e.stop()
 		insertSeriesIntoEstimator(e, 5_000, 100)
 
+		s := newSnapshot()
+		skp := newSketchesPool(e.buckets[0].precision, e.groupSize.avgBucketSize())
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			for _, eb := range e.buckets {
+				s.reset()
+				convertEstimatorBucketToSnapshot(eb, s, skp)
+				for _, sk := range s.Sketches {
+					skp.put(sk)
+				}
+			}
 		}
 	})
 
@@ -77,10 +91,19 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		}
 		insertSeriesIntoEstimator(e, 5_000, 100)
 
+		s := newSnapshot()
+		skp := newSketchesPool(e.buckets[0].precision, e.groupSize.avgBucketSize())
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			for _, eb := range e.buckets {
+				s.reset()
+				convertEstimatorBucketToSnapshot(eb, s, skp)
+				for _, sk := range s.Sketches {
+					skp.put(sk)
+				}
+			}
 		}
 	})
 
@@ -95,10 +118,19 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		defer e.stop()
 		insertSeriesIntoEstimator(e, 50_000, 10_000)
 
+		s := newSnapshot()
+		skp := newSketchesPool(e.buckets[0].precision, e.groupSize.avgBucketSize())
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			for _, eb := range e.buckets {
+				s.reset()
+				convertEstimatorBucketToSnapshot(eb, s, skp)
+				for _, sk := range s.Sketches {
+					skp.put(sk)
+				}
+			}
 		}
 	})
 
@@ -117,10 +149,19 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 		}
 		insertSeriesIntoEstimator(e, 50_000, 10_000)
 
+		s := newSnapshot()
+		skp := newSketchesPool(e.buckets[0].precision, e.groupSize.avgBucketSize())
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			e.writeMetrics(io.Discard)
+			for _, eb := range e.buckets {
+				s.reset()
+				convertEstimatorBucketToSnapshot(eb, s, skp)
+				for _, sk := range s.Sketches {
+					skp.put(sk)
+				}
+			}
 		}
 	})
 }
