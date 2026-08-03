@@ -737,11 +737,11 @@ func TestLabelKeywordEstimate(t *testing.T) {
 			}},
 		})
 	}, `
-cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="__label__"} 3
-cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 3
-cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="foo",by__label__="foo"} 2
-cardinality_estimate{interval="1h0m0s",group_by_keys="__label__",group_by_values="bar",by__label__="bar"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__label__"} 12345`,
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__label__"} 3
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 3
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__label__",group_by_values="foo",by__label__="foo"} 2
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__label__",group_by_values="bar",by__label__="bar"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__label__"} 12345`,
 	)
 
 	// __name__ + __label__: one sketch per (metric_name, label_name) pair
@@ -764,13 +764,13 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 			}},
 		})
 	}, `
-cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__,__label__"} 5
-cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,__name__",by__name__="metric_a",by__label__="__name__"} 1
-cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,foo",by__name__="metric_a",by__label__="foo"} 2
-cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_a,bar",by__name__="metric_a",by__label__="bar"} 1
-cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_b,__name__",by__name__="metric_b",by__label__="__name__"} 1
-cardinality_estimate{interval="1h0m0s",group_by_keys="__name__,__label__",group_by_values="metric_b,foo",by__name__="metric_b",by__label__="foo"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__,__label__"} 12345`,
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__,__label__"} 5
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__,__label__",group_by_values="metric_a,__name__",by__name__="metric_a",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__,__label__",group_by_values="metric_a,foo",by__name__="metric_a",by__label__="foo"} 2
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__,__label__",group_by_values="metric_a,bar",by__name__="metric_a",by__label__="bar"} 1
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__,__label__",group_by_values="metric_b,__name__",by__name__="metric_b",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__name__,__label__",group_by_values="metric_b,foo",by__name__="metric_b",by__label__="foo"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__,__label__"} 12345`,
 	)
 
 	// series missing an explicit group-by label are skipped entirely
@@ -789,11 +789,11 @@ vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",gr
 			}},
 		})
 	}, `
-cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,__label__"} 3
-cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,__name__",by_foo="f1",by__label__="__name__"} 1
-cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,foo",by_foo="f1",by__label__="foo"} 1
-cardinality_estimate{interval="1h0m0s",group_by_keys="foo,__label__",group_by_values="f1,bar",by_foo="f1",by__label__="bar"} 1
-vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo,__label__"} 12345`,
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,__label__"} 3
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,__label__",group_by_values="f1,__name__",by_foo="f1",by__label__="__name__"} 1
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,__label__",group_by_values="f1,foo",by_foo="f1",by__label__="foo"} 1
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="foo,__label__",group_by_values="f1,bar",by_foo="f1",by__label__="bar"} 1
+vmestimator_estimator_group_limit{interval="1h0m0s",filter="",group_by_keys="__group__",group_by_values="foo,__label__"} 12345`,
 	)
 }
 
