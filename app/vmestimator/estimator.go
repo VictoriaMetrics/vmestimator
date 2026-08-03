@@ -71,6 +71,12 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	groupByKeysLabel := "__global__"
 	if len(cfg.GroupBy) > 0 {
+		for _, k := range cfg.GroupBy {
+			if k == `__global__` || k == `__group__` {
+				return nil, fmt.Errorf("group by %s is not allowed. __global__, __group__ are reserved keywords", k)
+			}
+		}
+
 		groupByKeysLabel = strings.Join(cfg.GroupBy, `,`)
 	}
 
