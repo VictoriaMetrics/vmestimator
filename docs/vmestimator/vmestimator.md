@@ -137,8 +137,13 @@ streams:
     # Omit entirely for a single global estimate across all series.
     # Examples:
     #  - ["job"]
-    #  - ["__name__"] 
+    #  - ["__name__"]
     #  - ["vm_account_id","vm_project_id"]
+    #
+    # The special pseudo-label "__label__" may appear as the last element.
+    # It estimates the number of unique values per label name instead of a whole time series.
+    # Can be combined with explicit keys: ["job", "__label__"] gives unique values per label name, per job.
+    # "__label__" may appear at most once and must be the last element.
     #
     # default: none (single global estimate)
     group_by: '[<string>, ...]'
@@ -201,6 +206,14 @@ Each per-group line also includes individual `by_{key}="{val}"` labels:
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="instance,job"} 2
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
+```
+
+For `__label__` streams, the group value is the label name and `by__label__` holds it:
+```
+cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="__label__"} 3
+cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
+cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="job",by__label__="job"} 12
+cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="instance",by__label__="instance"} 87
 ```
 
 > Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached
@@ -267,6 +280,18 @@ Cardinality excluding non-production environments:
 - interval: '5m'
   filter: '{env!~"dev|staging"}'
 ```
+
+Per label unique values:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  group_by: ['__label__']
+```
+
+This estimates the number of unique values for every label name seen in the ingested traffic.
+Useful for identifying high-cardinality labels (e.g. `trace_id`, `user_id`) before they cause storage problems.
+Can be narrowed to a specific job: `['job', '__label__']`.
 
 ### Churn calculation
 
