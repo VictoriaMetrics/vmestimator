@@ -16,6 +16,10 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.9](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.9)
+
+Released at 2026-08-03
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `__label__` pseudo-label for `group_by`. It estimates unique values per label name, making it easy to spot high-cardinality labels like `trace_id` or `user_id`. Can be combined with explicit keys, e.g. `["job", "__label__"]`. See [#26](https://github.com/VictoriaMetrics/vmestimator/issues/26).
 
 * BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): fix snapshot merging collision when multiple estimators share the same `group_by` keys but use different `interval` values. Previously, snapshots from such estimators were incorrectly merged into a single entry, causing the interval of one to overwrite the other.
