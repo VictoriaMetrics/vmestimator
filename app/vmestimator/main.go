@@ -42,6 +42,15 @@ func main() {
 		logger.Fatalf("cannot load config: %v", err)
 	}
 
+	var labelFP bool
+	for _, e := range es {
+		for _, l := range e.groupBy {
+			if l == labelKeyword {
+				labelFP = true
+			}
+		}
+	}
+
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
 			writeCardinalityMetrics(w, es, *storageNodes)
@@ -68,7 +77,7 @@ func main() {
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+			err := protoparser.Parse(r.Body, labelFP, func(tss []protoparser.TimeSerie) {
 				esLen := uint32(len(es))
 				start := fastrand.Uint32n(esLen)
 				for j := uint32(0); j < esLen; j++ {

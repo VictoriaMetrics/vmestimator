@@ -22,10 +22,14 @@ import (
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
 
+const labelKeyword = "__label__"
+
 type estimator struct {
 	groupBy          []string
 	groupByKeysLabel string
 	groupSize        *groupSize
+
+	hasLabelKeyword bool
 
 	buckets []*estimatorBucket
 
@@ -76,9 +80,18 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		groupByKeysLabel = strings.Join(cfg.GroupBy, `,`)
 	}
 
+	if len(cfg.GroupBy) > 0 {
+		for i, k := range cfg.GroupBy[:len(cfg.GroupBy)-1] {
+			if k == labelKeyword {
+				panic(fmt.Sprintf("BUG: %s must be the last element of groupBy, got index %d in %v", labelKeyword, i, cfg.GroupBy))
+			}
+		}
+	}
+
 	e := &estimator{
 		groupBy:          cfg.GroupBy,
 		groupByKeysLabel: groupByKeysLabel,
+		hasLabelKeyword:  len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		groupSize: &groupSize{
 			limit:          int64(cfg.GroupLimit),
 			bucketSizes:    make([]int64, cfg.Buckets),
@@ -106,8 +119,9 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 			metricPrefix:     metricPrefix,
 			groupByKeysLabel: groupByKeysLabel,
 
-			precision: cfg.HLLPrecision,
-			sparse:    *cfg.HLLSparse,
+			precision:       cfg.HLLPrecision,
+			sparse:          *cfg.HLLSparse,
+			hasLabelKeyword: e.hasLabelKeyword,
 		}
 
 		if len(cfg.GroupBy) == 0 {
@@ -171,7 +185,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 			ts := tss[i]
 			bi := int(ts.Fingerprint % bucketsNum)
-			e.buckets[bi].insert(ts, "", nil)
+			e.buckets[bi].insert(ts.Fingerprint, "", nil)
 		}
 		e.insertTotal.Add(len(tss))
 		return
@@ -187,6 +201,12 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 	groupValues := make([]string, len(e.groupBy))
 
+	// When __label__ is present it is always the last element; iterate only the explicit keys.
+	groupByKeys := e.groupBy
+	if e.hasLabelKeyword {
+		groupByKeys = e.groupBy[:len(e.groupBy)-1]
+	}
+
 	tssLen := uint32(len(tss))
 	start := fastrand.Uint32n(tssLen)
 	for j := uint32(0); j < tssLen; j++ {
@@ -196,8 +216,9 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 		groupValuesKey = groupValuesKey[:0]
 		clear(groupValues)
-		var hasNames bool
-		for i, labelName := range e.groupBy {
+		// hasNames starts true when there are no explicit keys (pure __label__ mode).
+		hasNames := len(groupByKeys) == 0
+		for i, labelName := range groupByKeys {
 			if i > 0 {
 				groupValuesKey = append(groupValuesKey, ',')
 			}
@@ -218,9 +239,30 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			continue
 		}
 
-		bi := int(hash(groupValuesKey) % bucketsNum)
-		e.buckets[bi].insert(ts, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
-		cnt++
+		if !e.hasLabelKeyword {
+			bi := int(hash(groupValuesKey) % bucketsNum)
+			e.buckets[bi].insert(ts.Fingerprint, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
+			cnt++
+			continue
+		}
+
+		// __label__ expansion: one insert per label in the series.
+		explicitKeyLen := len(groupValuesKey)
+		lastIdx := len(e.groupBy) - 1
+		for _, label := range ts.Labels {
+			if label.Fingerprint == 0 {
+				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
+			}
+			groupValuesKey = groupValuesKey[:explicitKeyLen]
+			if explicitKeyLen > 0 {
+				groupValuesKey = append(groupValuesKey, ',')
+			}
+			groupValuesKey = append(groupValuesKey, label.Name...)
+			groupValues[lastIdx] = label.Name
+			bi := int(hash(groupValuesKey) % bucketsNum)
+			e.buckets[bi].insert(label.Fingerprint, bytesutil.ToUnsafeString(groupValuesKey), groupValues)
+			cnt++
+		}
 	}
 
 	e.insertTotal.Add(cnt)
@@ -340,6 +382,7 @@ type estimatorBucket struct {
 	groupByKeysLabel string
 	precision        uint8
 	sparse           bool
+	hasLabelKeyword  bool
 
 	sketch     *hyperloglog.Sketch
 	prevSketch *hyperloglog.Sketch
@@ -386,12 +429,12 @@ func (eb *estimatorBucket) rotate() {
 	eb.mu.Unlock()
 }
 
-func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey string, groupValues []string) {
+func (eb *estimatorBucket) insert(fp uint64, groupValuesKey string, groupValues []string) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 
 	if len(eb.groupBy) == 0 {
-		eb.sketch.InsertHash(ts.Fingerprint)
+		eb.sketch.InsertHash(fp)
 		return
 	}
 
@@ -410,9 +453,12 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 			formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey)
 			for i := range groupValues {
 				formatBuf = append(formatBuf, ',')
-				if eb.groupBy[i] == `__name__` {
+				switch eb.groupBy[i] {
+				case `__name__`:
 					formatBuf = append(formatBuf, `by__name__`...)
-				} else {
+				case labelKeyword:
+					formatBuf = append(formatBuf, `by__label__`...)
+				default:
 					formatBuf = append(formatBuf, `by_`...)
 					formatBuf = append(formatBuf, eb.groupBy[i]...)
 				}
@@ -432,7 +478,7 @@ func (eb *estimatorBucket) insert(ts protoparser.TimeSerie, groupValuesKey strin
 
 		eb.groups[strings.Clone(groupValuesKey)] = gsk
 	}
-	gsk.InsertHash(ts.Fingerprint)
+	gsk.InsertHash(fp)
 }
 
 func (eb *estimatorBucket) writeNoGroupMetric(res *hyperloglog.Sketch) {

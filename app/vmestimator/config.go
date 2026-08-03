@@ -45,6 +45,22 @@ func loadConfig(path string) ([]*estimator, error) {
 		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
 			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
 		}
+		count := 0
+		newGroupBy := make([]string, 0, len(stream.GroupBy))
+		for _, g := range stream.GroupBy {
+			if g == labelKeyword {
+				count++
+				continue
+			}
+			newGroupBy = append(newGroupBy, g)
+		}
+		if count > 1 {
+			return nil, fmt.Errorf("__label__ may appear at most once in group_by")
+		}
+		if count == 1 {
+			newGroupBy = append(newGroupBy, labelKeyword)
+		}
+		stream.GroupBy = newGroupBy
 	}
 
 	es := make([]*estimator, 0, len(cfg.Streams))

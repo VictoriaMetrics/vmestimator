@@ -17,6 +17,10 @@ type TimeSerie struct {
 type Label struct {
 	Name  string
 	Value string
+
+	// Contains fingerprint of Value.
+	// Calculated only if labelFP given to Parse function is true
+	Fingerprint uint64
 }
 
 func getWriteRequestUnmarshaler() *writeRequestUnmarshaler {
@@ -25,7 +29,6 @@ func getWriteRequestUnmarshaler() *writeRequestUnmarshaler {
 		return &writeRequestUnmarshaler{
 			tss:        make([]TimeSerie, 0, 1024),
 			labelsPool: make([]Label, 0, 4096),
-			d:          xxhash.New(),
 		}
 	}
 	return v.(*writeRequestUnmarshaler)
@@ -45,17 +48,15 @@ var wruPool sync.Pool
 type writeRequestUnmarshaler struct {
 	tss        []TimeSerie
 	labelsPool []Label
-	d          *xxhash.Digest
 }
 
 // Reset resets wru, so it could be re-used.
 func (wru *writeRequestUnmarshaler) Reset() {
 	wru.tss = wru.tss[:0]
 	wru.labelsPool = wru.labelsPool[:0]
-	wru.d.Reset()
 }
 
-func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, callback func(tss []TimeSerie)) error {
+func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, labelFP bool, callback func(tss []TimeSerie)) error {
 	wru.Reset()
 
 	var err error
@@ -88,9 +89,7 @@ func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, callback func(
 			}
 			tss = tss[:len(tss)+1]
 			ts := &tss[len(tss)-1]
-			d := wru.d
-			d.Reset()
-			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, d)
+			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, labelFP)
 			if err != nil {
 				return fmt.Errorf("cannot unmarshal timeseries: %w", err)
 			}
@@ -105,15 +104,31 @@ func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, callback func(
 
 	wru.tss = tss[:0]
 	wru.labelsPool = labelsPool
-	wru.d.Reset()
 	return nil
 }
 
-func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, d *xxhash.Digest) ([]Label, error) {
+func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, labelFP bool) ([]Label, error) {
 	// message TimeSeries {
 	//   repeated Label labels   = 1;
 	//   repeated Sample samples = 2;
 	// }
+
+	tsD := getDigest()
+	defer putDigest(tsD)
+
+	digestLabel := func(value []byte) uint64 {
+		return 0
+	}
+	if labelFP {
+		ld := getDigest()
+		defer putDigest(ld)
+
+		digestLabel = func(value []byte) uint64 {
+			ld.Reset()
+			_, _ = ld.Write(value)
+			return ld.Sum64()
+		}
+	}
 
 	labelsPoolLen := len(labelsPool)
 	var fc easyproto.FieldContext
@@ -152,15 +167,30 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, d *xxhash
 				}
 			}
 
-			_, _ = d.Write(data)
-
+			_, _ = tsD.Write(data)
 			labelsPool = append(labelsPool, Label{
-				Name:  bytesutil.ToUnsafeString(nameBytes),
-				Value: bytesutil.ToUnsafeString(valueBytes),
+				Name:        bytesutil.ToUnsafeString(nameBytes),
+				Value:       bytesutil.ToUnsafeString(valueBytes),
+				Fingerprint: digestLabel(valueBytes),
 			})
 		}
 	}
 	ts.Labels = labelsPool[labelsPoolLen:]
-	ts.Fingerprint = d.Sum64()
+	ts.Fingerprint = tsD.Sum64()
 	return labelsPool, nil
+}
+
+func getDigest() *xxhash.Digest {
+	return xxhashPool.Get().(*xxhash.Digest)
+}
+
+func putDigest(d *xxhash.Digest) {
+	d.Reset()
+	xxhashPool.Put(d)
+}
+
+var xxhashPool = &sync.Pool{
+	New: func() any {
+		return xxhash.New()
+	},
 }
