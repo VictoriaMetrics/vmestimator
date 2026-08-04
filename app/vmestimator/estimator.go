@@ -88,10 +88,11 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		stopCh:     make(chan struct{}),
 	}
 
+	groupByKeysLabel := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_values`, cfg.GroupBy)
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{%s,interval=%q}`, appendGroupByKeysLabel(nil, cfg.GroupBy), cfg.Interval),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{%s,interval=%q}`, groupByKeysLabel, cfg.Interval),
 	)
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, appendGroupByKeysLabel(nil, cfg.GroupBy), cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalRejected())
 	})
 
@@ -118,10 +119,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		e.buckets[i] = eb
 	}
 
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q}`, appendGroupByKeysLabel(nil, cfg.GroupBy), cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.limit)
 	})
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q}`, appendGroupByKeysLabel(nil, cfg.GroupBy), cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalSize())
 	})
 
@@ -204,29 +205,26 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			}
 		}
 
-		// time series does not contribute to this groupBy
-		if !hasNames {
-			continue
-		}
-
-		if !e.hasLabelKeyword {
+		// when true time series does contribute to this groupBy
+		if hasNames {
 			bi := int(groupValuesKey.Hash() % bucketsNum)
 			e.buckets[bi].insert(ts.Fingerprint, groupValuesKey)
 			cnt++
-			continue
 		}
 
-		// __label__ expansion: one insert per label in the series.
-		lastIdx := len(e.groupBy) - 1
-		for _, label := range ts.Labels {
-			if label.Fingerprint == 0 {
-				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
+		if e.hasLabelKeyword {
+			// __label__ expansion: one insert per label in the series.
+			lastIdx := len(e.groupBy) - 1
+			for _, label := range ts.Labels {
+				if label.Fingerprint == 0 {
+					panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
+				}
+				lvs := groupValuesKey.Clone()
+				lvs.Arr[lastIdx] = label.Name
+				bi := int(lvs.Hash() % bucketsNum)
+				e.buckets[bi].insert(label.Fingerprint, lvs)
+				cnt++
 			}
-			lvs := groupValuesKey.Clone()
-			lvs.Arr[lastIdx] = label.Name
-			bi := int(lvs.Hash() % bucketsNum)
-			e.buckets[bi].insert(label.Fingerprint, lvs)
-			cnt++
 		}
 	}
 

@@ -92,10 +92,10 @@ func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
 }
 
 func (s *snapshot) merge(other *snapshot) {
-	if !slices.Equal(s.GroupBy, other.GroupBy) {
+	if s.GroupBy != nil && !slices.Equal(s.GroupBy, other.GroupBy) {
 		logger.Panicf("BUG: merge snapshots must have the same groupBy; s: %v; other: %v", s.GroupBy, other.GroupBy)
 	}
-	if s.Interval != other.Interval {
+	if s.Interval != 0 && s.Interval != other.Interval {
 		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
 	}
 
@@ -138,7 +138,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 		return nil
 	}
 
-	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), s.GroupBy)
+	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)
 	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
 
 	for vs, sk := range s.Sketches {
@@ -195,7 +195,7 @@ func (s *snapshot) key() string {
 		return "group_by_keys=\"__global__\"\u0000" + s.Interval.String() + labelsStr
 	}
 
-	return string(appendGroupByKeysLabel(make([]byte, 0, 128), s.GroupBy)) + "\x00" + s.Interval.String() + labelsStr
+	return string(appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)) + "\x00" + s.Interval.String() + labelsStr
 }
 
 func (s *snapshot) reset() {
@@ -211,10 +211,6 @@ func convertGlobalEstimatorToSnapshot(e *estimator, s *snapshot) *snapshot {
 	if len(e.groupBy) != 0 {
 		panic("BUG: do not use this function for estimator with non-empty groupBy")
 	}
-	if s == nil {
-		s = newSnapshot()
-	}
-	s.reset()
 
 	eb0 := e.buckets[0]
 
@@ -297,7 +293,7 @@ func appendCardinalityEstimateGlobalMetric(buf []byte, metricPrefix string) []by
 func appendCardinalityEstimateGroupSizeMetric(buf []byte, metricPrefix string, keys []string) []byte {
 	buf = append(buf, metricPrefix...)
 	buf = append(buf, `,group_by_keys="__group__",`...)
-	buf = appendGroupByKeysLabel(buf, keys)
+	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
 	buf = append(buf, `} `...)
 	return buf
 }
@@ -309,7 +305,7 @@ func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) [
 	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
 	buf = append(buf, interval.String()...)
 	buf = append(buf, `",group_by_keys="__group__",`...)
-	buf = appendGroupByKeysLabel(buf, keys)
+	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
 	buf = append(buf, `} `...)
 	return buf
 }
@@ -342,6 +338,8 @@ func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeys
 		buf = append(buf, ',')
 		if keys[i] == `__name__` {
 			buf = append(buf, `by__name__`...)
+		} else if keys[i] == `__label__` {
+			buf = append(buf, `by__label__`...)
 		} else {
 			buf = append(buf, `by_`...)
 			buf = append(buf, keys[i]...)
@@ -357,7 +355,7 @@ func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeys
 
 // appendCardinalityEstimateGroupMetrics produces:
 // 'group_by_keys="fooKey,barKey"'
-func appendGroupByKeysLabel(buf []byte, keys []string) []byte {
+func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte {
 	tmpBufP := getFormatBuf()
 	tmpBuf := *tmpBufP
 	defer func() {
@@ -372,7 +370,8 @@ func appendGroupByKeysLabel(buf []byte, keys []string) []byte {
 
 		tmpBuf = append(tmpBuf, keys[i]...)
 	}
-	buf = append(buf, `group_by_keys=`...)
+	buf = append(buf, labelName...)
+	buf = append(buf, '=')
 	buf = strconv.AppendQuote(buf, bytesutil.ToUnsafeString(tmpBuf))
 	return buf
 }
