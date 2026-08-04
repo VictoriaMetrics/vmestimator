@@ -10,7 +10,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
-var skipTs = errors.New("skip time series")
+var errSkipTs = errors.New("skip time series")
 
 type TimeSerie struct {
 	Labels      []Label
@@ -93,7 +93,7 @@ func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, labelFP bool, 
 			tss = tss[:len(tss)+1]
 			ts := &tss[len(tss)-1]
 			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, labelFP)
-			if errors.Is(err, skipTs) {
+			if errors.Is(err, errSkipTs) {
 				tss = tss[:len(tss)-1]
 			} else if err != nil {
 				return fmt.Errorf("cannot unmarshal timeseries: %w", err)
@@ -178,7 +178,7 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, labelFP b
 			// Skip cardinality_estimate metrics — estimating the estimator's own output adds noise without value.
 			// See https://github.com/VictoriaMetrics/vmestimator/issues/30
 			if name == `__name__` && value == `cardinality_estimate` {
-				return labelsPool[:labelsPoolLen], skipTs
+				return labelsPool[:labelsPoolLen], errSkipTs
 			}
 
 			_, _ = tsD.Write(data)
