@@ -218,11 +218,11 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 }
 
 // BenchmarkEstimator_InsertRotateCycle benchmarks the insert→rotate→insert cycle
-// for the global (no-group) estimator in two HLL regimes:
+// in two HLL regimes (sparse/normal) and two grouping modes (no-group/grouped).
 //   - Sparse: 1 000 series per interval (sketch stays in sparse mode)
 //   - Normal: 30 000 series per interval (sketch converts to dense mode)
 func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
-	b.Run("SparseHLL", func(b *testing.B) {
+	b.Run("NoGroup/SparseHLL", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
@@ -239,7 +239,7 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		}
 	})
 
-	b.Run("NormalHLL", func(b *testing.B) {
+	b.Run("NoGroup/NormalHLL", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
@@ -250,6 +250,46 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			insertSeriesIntoEstimator(e, 30_000, 0)
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+		}
+	})
+
+	b.Run("Group100/SparseHLL", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{
+			GroupBy:  []string{"groupLabel"},
+			Interval: time.Hour,
+		})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			insertSeriesIntoEstimator(e, 1_000, 100)
+			for i := range e.buckets {
+				e.buckets[i].rotate()
+			}
+		}
+	})
+
+	b.Run("Group100/NormalHLL", func(b *testing.B) {
+		e, err := newEstimator(EstimatorConfig{
+			GroupBy:  []string{"groupLabel"},
+			Interval: time.Hour,
+		})
+		if err != nil {
+			b.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			insertSeriesIntoEstimator(e, 30_000, 100)
 			for i := range e.buckets {
 				e.buckets[i].rotate()
 			}
