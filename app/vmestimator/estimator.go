@@ -190,10 +190,11 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 		ts := tss[i]
 
-		groupValuesKey := values{
-			Cap: len(e.groupBy),
+		var groupValuesKey = values{
+			Cap: len(groupByKeys),
 		}
-		var hasNames bool
+		// hasNames starts true when there are no explicit keys (pure __label__ mode).
+		hasNames := len(groupByKeys) == 0
 		for i, labelName := range groupByKeys {
 			for _, l := range ts.Labels {
 				if l.Name == labelName {
@@ -205,26 +206,30 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			}
 		}
 
-		// when true time series does contribute to this groupBy
-		if hasNames {
+		// time series does not contribute to this groupBy
+		if !hasNames {
+			continue
+		}
+
+		if !e.hasLabelKeyword {
 			bi := int(groupValuesKey.Hash() % bucketsNum)
 			e.buckets[bi].insert(ts.Fingerprint, groupValuesKey)
 			cnt++
+			continue
 		}
 
-		if e.hasLabelKeyword {
-			// __label__ expansion: one insert per label in the series.
-			lastIdx := len(e.groupBy) - 1
-			for _, label := range ts.Labels {
-				if label.Fingerprint == 0 {
-					panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
-				}
-				lvs := groupValuesKey.Clone()
-				lvs.Arr[lastIdx] = label.Name
-				bi := int(lvs.Hash() % bucketsNum)
-				e.buckets[bi].insert(label.Fingerprint, lvs)
-				cnt++
+		// extend cap to accommodate for label key
+		groupValuesKey.Cap += 1
+		// __label__ expansion: one insert per label in the series.
+		labelIdx := groupValuesKey.Cap - 1
+		for _, label := range ts.Labels {
+			if label.Fingerprint == 0 {
+				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
 			}
+			groupValuesKey.Arr[labelIdx] = label.Name
+			bi := int(groupValuesKey.Hash() % bucketsNum)
+			e.buckets[bi].insert(label.Fingerprint, groupValuesKey)
+			cnt++
 		}
 	}
 
@@ -260,7 +265,7 @@ func (e *estimator) writeMetrics(w io.Writer) {
 			skp.put(sk)
 		}
 	}
-	if err := s.writeGroupSizeAndLimit(w); err != nil {
+	if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
 		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 	}
 }

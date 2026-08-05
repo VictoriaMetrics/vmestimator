@@ -55,7 +55,7 @@ func TestGlobalSnapshot(t *testing.T) {
 		expMetric := buf.String()
 
 		buf.Reset()
-		if err := convertGlobalEstimatorToSnapshot(e, nil).writeCardinalityEstimates(buf); err != nil {
+		if err := convertGlobalEstimatorToSnapshot(e, newSnapshot()).writeMetrics(buf); err != nil {
 			t.Fatalf("convertGlobalEstimatorToSnapshot: %v", err)
 		}
 		assertMetricsSame(t, "convertGlobalEstimatorToSnapshot", expMetric, buf.String())
@@ -217,7 +217,7 @@ func TestGroupSnapshot(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		if err := convertGroupToSnapshot(e, nil).writeCardinalityEstimates(buf); err != nil {
+		if err := convertGroupToSnapshot(e, newSnapshot()).writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
@@ -380,10 +380,10 @@ func TestGroupSnapshot(t *testing.T) {
 }
 
 func TestSnapshotsAdd(t *testing.T) {
-	makeSnapshot := func(groupByKeysLabel string, interval time.Duration) *snapshot {
+	makeSnapshot := func(groupBy []string, interval time.Duration) *snapshot {
 		s := newSnapshot()
 		s.Interval = interval
-		s.GroupBy = []string{"foo"}
+		s.GroupBy = groupBy
 		return s
 	}
 
@@ -400,41 +400,41 @@ func TestSnapshotsAdd(t *testing.T) {
 
 	// same group_by keys, same interval => merged into one
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
 	}, 1)
 
 	// same group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 10*time.Minute),
 	}, 2)
 
 	// different group_by keys, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="b"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`b`}, 5*time.Minute),
 	}, 2)
 
 	// different group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="b"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`b`}, 10*time.Minute),
 	}, 2)
 
-	// three snapshots: two share keys+interval, third differs only by interval
+	// three snapshots: two share group_by+interval, third differs only by interval
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 10*time.Minute),
 	}, 2)
 
 	// all distinct
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, 5*time.Minute),
-		makeSnapshot(`foo="b"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, 10*time.Minute),
-		makeSnapshot(`foo="b"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`b`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, 10*time.Minute),
+		makeSnapshot([]string{`b`}, 10*time.Minute),
 	}, 4)
 }
 
@@ -469,8 +469,8 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		s := convertGroupToSnapshot(e, nil)
-		if err := s.writeCardinalityEstimates(buf); err != nil {
+		s := convertGroupToSnapshot(e, newSnapshot())
+		if err := s.writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
 		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())

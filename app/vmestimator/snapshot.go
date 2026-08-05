@@ -4,9 +4,11 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"log"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,10 +46,7 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 	defer ss.mu.Unlock()
 
 	for _, s := range ss.m {
-		if err := s.writeCardinalityEstimates(w); err != nil {
-			return err
-		}
-		if err := s.writeGroupSizeAndLimit(w); err != nil {
+		if err := s.writeMetrics(w); err != nil {
 			return err
 		}
 	}
@@ -56,12 +55,11 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 }
 
 type snapshot struct {
-	Labels   map[string]string
 	Interval time.Duration
-	GroupBy  []string
+	Labels   map[string]string
 
+	GroupBy         []string
 	GroupLimit      int64
-	GroupSize       int64
 	GroupRejectSize int64
 
 	// prom string metric => hll
@@ -109,9 +107,22 @@ func (s *snapshot) merge(other *snapshot) {
 
 	s.Interval = other.Interval
 	s.Labels = other.Labels
-	s.GroupLimit = other.GroupLimit
+
 	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
+	s.GroupLimit = other.GroupLimit
 	s.GroupRejectSize += other.GroupRejectSize
+}
+
+func (s *snapshot) writeMetrics(w io.Writer) error {
+	if err := s.writeCardinalityEstimates(w); err != nil {
+		return err
+	}
+	if len(s.GroupBy) > 0 {
+		if err := s.writeGroupSizeAndLimit(w, int64(len(s.Sketches))+s.GroupRejectSize); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeCardinalityEstimates writes metrics to w.
@@ -156,7 +167,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 
 // writeGroupSizeAndLimit writes metrics to w.
 // w must be a buffered writer.
-func (s *snapshot) writeGroupSizeAndLimit(w io.Writer) error {
+func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	tmpBufP := getFormatBuf()
 	tmpBuf := *tmpBufP
 	defer func() {
@@ -164,7 +175,10 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	groupSize := s.GroupSize + s.GroupRejectSize
+	log.Println(`--------------------`)
+	for vs, _ := range s.Sketches {
+		log.Println(vs)
+	}
 
 	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
@@ -189,13 +203,12 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer) error {
 }
 
 func (s *snapshot) key() string {
-	labelsStr := fmt.Sprintf("\u0000labels=%v", s.Labels)
-
-	if len(s.GroupBy) == 0 {
-		return "group_by_keys=\"__global__\"\u0000" + s.Interval.String() + labelsStr
+	groupByKey := `__global__`
+	if len(s.GroupBy) > 0 {
+		groupByKey = strings.Join(s.GroupBy, ",")
 	}
 
-	return string(appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)) + "\x00" + s.Interval.String() + labelsStr
+	return fmt.Sprintf("\u0000labels=%v\u0000group_by=%v\u0000interval=%v", s.Labels, groupByKey, s.Interval)
 }
 
 func (s *snapshot) reset() {
@@ -234,13 +247,10 @@ func convertGroupToSnapshot(e *estimator, s *snapshot) *snapshot {
 		panic("BUG: do not use this function for estimator with empty groupBy")
 	}
 
-	if s == nil {
-		s = newSnapshot()
-	}
-	s.reset()
-
+	eb0 := e.buckets[0]
+	skp := newSketchesPool(eb0.precision, int(eb0.groupSize.size.Load()))
 	for _, eb := range e.buckets {
-		convertEstimatorBucketToSnapshot(eb, s, newSketchesPool(eb.precision, 1000))
+		convertEstimatorBucketToSnapshot(eb, s, skp)
 	}
 	return s
 }
@@ -268,7 +278,6 @@ func convertEstimatorBucketToSnapshot(eb *estimatorBucket, s *snapshot, skp *ske
 	eb.mu.Unlock()
 
 	s.GroupLimit = eb.groupSize.limit
-	s.GroupSize = eb.groupSize.size.Load()
 	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)
 	s.Interval = eb.interval
 	s.Labels = eb.labels
