@@ -63,12 +63,12 @@ type snapshot struct {
 	GroupRejectSize int64
 
 	// prom string metric => hll
-	Sketches map[values]*hyperloglog.Sketch
+	Sketches map[string]*hyperloglog.Sketch
 }
 
 func newSnapshot() *snapshot {
 	return &snapshot{
-		Sketches: make(map[values]*hyperloglog.Sketch),
+		Sketches: make(map[string]*hyperloglog.Sketch),
 	}
 }
 
@@ -141,7 +141,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 	if len(s.GroupBy) == 0 {
 		tmpBuf = tmpBuf[:0]
 		tmpBuf = appendCardinalityEstimateGlobalMetric(tmpBuf, metricPrefix)
-		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[values{}].Estimate(), 10)
+		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[`__global__`].Estimate(), 10)
 		tmpBuf = append(tmpBuf, "\n"...)
 		if _, err := w.Write(tmpBuf); err != nil {
 			return err
@@ -234,7 +234,7 @@ func convertGlobalEstimatorToSnapshot(e *estimator, s *snapshot) *snapshot {
 		eb.mu.Unlock()
 	}
 
-	s.Sketches[values{}] = resSK
+	s.Sketches[`__global__`] = resSK
 	s.Interval = eb0.interval
 	s.Labels = eb0.labels
 	s.GroupBy = append(s.GroupBy[:0], eb0.groupBy...)
@@ -321,7 +321,7 @@ func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) [
 
 // appendCardinalityEstimateGroupMetrics produces:
 // 'cardinality_estimate{interval="5m",group_by_keys="fooKey,barKey",group_by_values='fooVal,BarVal',by_fooKey="fooVal",by_barKey="barVal"} '
-func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeysLabel string, keys []string, values values) []byte {
+func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeysLabel string, keys, values []string) []byte {
 	buf = append(buf, metricPrefix...)
 	buf = append(buf, `,`...)
 	buf = append(buf, groupByKeysLabel...)
