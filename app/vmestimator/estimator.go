@@ -440,15 +440,13 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey string, groupValues 
 
 	gsk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		prevGSK, ok := eb.prevGroups[groupValuesKey]
-		if !ok {
+		var groupValueLabels string
+		var sk *hyperloglog.Sketch
+		if prevGSK, ok := eb.prevGroups[groupValuesKey]; !ok {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
 				return
 			}
-		}
 
-		groupValueLabels := prevGSK.groupValueLabels
-		if len(groupValueLabels) == 0 {
 			formatBuf := make([]byte, 0, 1024)
 			formatBuf = strconv.AppendQuote(formatBuf, groupValuesKey)
 			for i := range groupValues {
@@ -468,12 +466,18 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey string, groupValues 
 			formatBuf = append(formatBuf, `} `...)
 
 			groupValueLabels = bytesutil.ToUnsafeString(formatBuf)
+			sk = eb.newSketch()
+		} else {
+			groupValueLabels = prevGSK.groupValueLabels
+
+			sk = prevGSK.Sketch
+			sk.Reset()
+			delete(eb.prevGroups, groupValuesKey)
 		}
 
 		gsk = groupSketch{
 			groupValueLabels: groupValueLabels,
-
-			Sketch: eb.newSketch(),
+			Sketch:           sk,
 		}
 
 		eb.groups[strings.Clone(groupValuesKey)] = gsk
