@@ -379,18 +379,23 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey values) {
 		return
 	}
 
-	gsk, ok := eb.groups[groupValuesKey]
+	sk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		if _, ok := eb.prevGroups[groupValuesKey]; !ok {
+		if prevSK, ok := eb.prevGroups[groupValuesKey]; !ok {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
 				return
 			}
+
+			sk = eb.newSketch()
+		} else {
+			sk = prevSK
+			sk.Reset()
+			delete(eb.prevGroups, groupValuesKey)
 		}
 
-		gsk = eb.newSketch()
-		eb.groups[groupValuesKey.Clone()] = gsk
+		eb.groups[groupValuesKey] = sk
 	}
-	gsk.InsertHash(fp)
+	sk.InsertHash(fp)
 }
 
 func (eb *estimatorBucket) mergeSketches(cur, prev, res *hyperloglog.Sketch) {
