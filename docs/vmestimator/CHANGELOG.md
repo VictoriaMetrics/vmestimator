@@ -18,6 +18,12 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
  
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `filter` field to stream configuration for filtering time series by label matchers before counting. Supports equality (`=`), negative equality (`!=`), regexp (`=~`), and negative regexp (`!~`) matchers in MetricsQL selector syntax, e.g. `{job="api",env!~"dev|staging"}`. See [#29](https://github.com/VictoriaMetrics/vmestimator/pull/29).
 
+* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): prev sketches reuse of HLL sketches reverted as it hurts estimate precision. 
+
+## [v0.1.10](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.10)
+
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): Reduce memory presure on rotation by reusing HLL sketches from previous group. 
+
 ## [v0.1.9](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.9)
 
 Released at 2026-08-03
