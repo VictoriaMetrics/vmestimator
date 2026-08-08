@@ -11,7 +11,7 @@ sitemap:
 
 * Create tag locally:
 ```sh
-git tag -m v0.1.8 "Release v0.1.8" -s 
+git tag v0.1.8 -m "Release v0.1.8" -s 
 ```
 
 * Publish release:

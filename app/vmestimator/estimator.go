@@ -112,8 +112,8 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		if len(cfg.GroupBy) == 0 {
 			eb.sketch = eb.newSketch()
 		} else {
-			eb.groups = make(map[string]*hyperloglog.Sketch)
-			eb.prevGroups = make(map[string]*hyperloglog.Sketch)
+			eb.groups = make(map[uint64]groupSketch)
+			eb.prevGroups = make(map[uint64]groupSketch)
 		}
 
 		e.buckets[i] = eb
@@ -170,7 +170,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 			ts := tss[i]
 			bi := int(ts.Fingerprint % bucketsNum)
-			e.buckets[bi].insert(ts.Fingerprint, ``)
+			e.buckets[bi].insert(ts.Fingerprint, 0, nil)
 		}
 		e.insertTotal.Add(len(tss))
 		return
@@ -179,16 +179,13 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	var cnt int
 	// When __label__ is present it is always the last element; iterate only the explicit keys.
 	groupByKeys := e.groupBy
+	groupValues := make([]string, len(e.groupBy))
 	if e.hasLabelKeyword {
 		groupByKeys = e.groupBy[:len(e.groupBy)-1]
 	}
 
-	groupValuesKeyP := getFormatBuf()
-	groupValuesKey := *groupValuesKeyP
-	defer func() {
-		*groupValuesKeyP = groupValuesKey
-		putFormatBuf(groupValuesKeyP)
-	}()
+	d := getDigest()
+	defer putDigest(d)
 
 	tssLen := uint32(len(tss))
 	start := fastrand.Uint32n(tssLen)
@@ -196,19 +193,18 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		i := (start + j) % tssLen
 
 		ts := tss[i]
+		d.Reset()
 
 		// hasNames starts true when there are no explicit keys (pure __label__ mode).
 		hasNames := len(groupByKeys) == 0
 		for i, labelName := range groupByKeys {
-			if i > 0 {
-				groupValuesKey = append(groupValuesKey, "\u0000"...)
-			}
-
 			for _, l := range ts.Labels {
 				if l.Name == labelName {
 					hasNames = true
 
-					groupValuesKey = append(groupValuesKey, l.Value...)
+					_, _ = d.WriteString("\u0000")
+					_, _ = d.WriteString(l.Value)
+					groupValues[i] = l.Value
 					break
 				}
 			}
@@ -220,25 +216,30 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		}
 
 		if !e.hasLabelKeyword {
-			bi := int(hash(groupValuesKey) % bucketsNum)
-			e.buckets[bi].insert(ts.Fingerprint, bytesutil.ToUnsafeString(groupValuesKey))
+			key := d.Sum64()
+			bi := int(key % bucketsNum)
+			e.buckets[bi].insert(ts.Fingerprint, key, groupValues)
 			cnt++
 			continue
 		}
 
 		// __label__ expansion: one insert per label in the series.
-		if len(groupValuesKey) > 0 {
-			groupValuesKey = append(groupValuesKey, "\u0000"...)
-		}
-		groupValuesKeyLen := len(groupValuesKey)
+		labelIdx := len(e.groupBy) - 1
 		for _, label := range ts.Labels {
+			ld := *d
+			if len(groupByKeys) > 0 {
+				_, _ = ld.WriteString("\u0000")
+			}
+
 			if label.Fingerprint == 0 {
 				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
 			}
-			groupValuesKey = groupValuesKey[:groupValuesKeyLen]
-			groupValuesKey = append(groupValuesKey, label.Name...)
-			bi := int(hash(groupValuesKey) % bucketsNum)
-			e.buckets[bi].insert(label.Fingerprint, bytesutil.ToUnsafeString(groupValuesKey))
+			_, _ = ld.WriteString(label.Name)
+			groupValues[labelIdx] = label.Name
+
+			key := ld.Sum64()
+			bi := int(key % bucketsNum)
+			e.buckets[bi].insert(label.Fingerprint, key, groupValues)
 			cnt++
 		}
 	}
@@ -271,8 +272,8 @@ func (e *estimator) writeMetrics(w io.Writer) {
 		if err := s.writeCardinalityEstimates(w); err != nil {
 			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 		}
-		for _, sk := range s.Sketches {
-			skp.put(sk)
+		for _, ssk := range s.Sketches {
+			skp.put(ssk.Sketch)
 		}
 	}
 	if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
@@ -326,8 +327,8 @@ func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
 		if err := enc.Encode(s); err != nil {
 			return fmt.Errorf("encode snapshot: %w", err)
 		}
-		for _, sk := range s.Sketches {
-			skp.put(sk)
+		for _, ssk := range s.Sketches {
+			skp.put(ssk.Sketch)
 		}
 	}
 
@@ -349,8 +350,8 @@ type estimatorBucket struct {
 	prevSketch *hyperloglog.Sketch
 
 	groupSize  *groupSize
-	groups     map[string]*hyperloglog.Sketch
-	prevGroups map[string]*hyperloglog.Sketch
+	groups     map[uint64]groupSketch
+	prevGroups map[uint64]groupSketch
 }
 
 func (eb *estimatorBucket) reset() {
@@ -363,8 +364,8 @@ func (eb *estimatorBucket) reset() {
 		return
 	}
 
-	eb.groups = make(map[string]*hyperloglog.Sketch)
-	eb.prevGroups = make(map[string]*hyperloglog.Sketch)
+	eb.groups = make(map[uint64]groupSketch)
+	eb.prevGroups = make(map[uint64]groupSketch)
 
 	eb.groupSize.rotateLocked(eb.idx, 0)
 }
@@ -380,12 +381,12 @@ func (eb *estimatorBucket) rotate() {
 
 	eb.mu.Lock()
 	eb.prevGroups = eb.groups
-	eb.groups = make(map[string]*hyperloglog.Sketch, len(eb.groups))
+	eb.groups = make(map[uint64]groupSketch, len(eb.groups))
 	eb.groupSize.rotateLocked(eb.idx, int64(len(eb.prevGroups)))
 	eb.mu.Unlock()
 }
 
-func (eb *estimatorBucket) insert(fp uint64, groupValuesKey string) {
+func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues []string) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
 
@@ -394,23 +395,21 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey string) {
 		return
 	}
 
-	sk, ok := eb.groups[groupValuesKey]
+	gsk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		if prevSK, ok := eb.prevGroups[groupValuesKey]; !ok {
+		if _, ok := eb.prevGroups[groupValuesKey]; !ok {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
 				return
 			}
-
-			sk = eb.newSketch()
-		} else {
-			sk = prevSK
-			sk.Reset()
-			delete(eb.prevGroups, groupValuesKey)
 		}
 
-		eb.groups[groupValuesKey] = sk
+		gsk = groupSketch{
+			values: append([]string{}, groupValues...),
+			Sketch: eb.newSketch(),
+		}
+		eb.groups[groupValuesKey] = gsk
 	}
-	sk.InsertHash(fp)
+	gsk.InsertHash(fp)
 }
 
 func (eb *estimatorBucket) mergeSketches(cur, prev, res *hyperloglog.Sketch) {
@@ -429,9 +428,9 @@ func (eb *estimatorBucket) newSketch() *hyperloglog.Sketch {
 }
 
 type groupSketch struct {
-	groupValueLabels string
-
 	*hyperloglog.Sketch
+
+	values []string
 }
 
 type groupSize struct {
@@ -445,7 +444,7 @@ type groupSize struct {
 }
 
 // allowInsertLocked must be called under estimatorBucket lock
-func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey string) bool {
+func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey uint64) bool {
 	if gs.size.Load() >= gs.limit {
 		gs.rejectMu.Lock()
 		sk := gs.rejectSketches[bucketIdx]
@@ -453,7 +452,7 @@ func (gs *groupSize) allowInsertLocked(bucketIdx int, groupValuesKey string) boo
 			sk = mustNewGroupRejectSketch()
 			gs.rejectSketches[bucketIdx] = sk
 		}
-		sk.InsertHash(hash(bytesutil.ToUnsafeBytes(groupValuesKey)))
+		sk.InsertHash(groupValuesKey)
 		gs.rejectMu.Unlock()
 		return false
 	}
@@ -541,8 +540,8 @@ func (vs values) Hash() uint64 {
 		return vs.hash
 	}
 
-	h := getHasher()
-	defer putHasher(h)
+	h := getDigest()
+	defer putDigest(h)
 
 	for i := 0; i < vs.Cap; i++ {
 		_, _ = h.Write(bytesutil.ToUnsafeBytes(vs.Arr[i]))
@@ -563,17 +562,17 @@ func (vs values) Clone() values {
 	return ck
 }
 
-func getHasher() *xxhash.Digest {
-	v := hasherPool.Get()
-	if v == nil {
+func getDigest() *xxhash.Digest {
+	d := digestPool.Get()
+	if d == nil {
 		return xxhash.New()
 	}
-	return v.(*xxhash.Digest)
+	return d.(*xxhash.Digest)
 }
 
-func putHasher(h *xxhash.Digest) {
-	h.Reset()
-	hasherPool.Put(h)
+func putDigest(d *xxhash.Digest) {
+	defer d.Reset()
+	digestPool.Put(d)
 }
 
-var hasherPool sync.Pool
+var digestPool sync.Pool

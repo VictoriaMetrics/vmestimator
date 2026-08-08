@@ -69,8 +69,8 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			for _, eb := range e.buckets {
 				s.reset()
 				convertEstimatorBucketToSnapshot(eb, s, skp)
-				for _, sk := range s.Sketches {
-					skp.put(sk)
+				for _, ssk := range s.Sketches {
+					skp.put(ssk.Sketch)
 				}
 			}
 		}
@@ -100,8 +100,8 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			for _, eb := range e.buckets {
 				s.reset()
 				convertEstimatorBucketToSnapshot(eb, s, skp)
-				for _, sk := range s.Sketches {
-					skp.put(sk)
+				for _, ssk := range s.Sketches {
+					skp.put(ssk.Sketch)
 				}
 			}
 		}
@@ -127,8 +127,8 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			for _, eb := range e.buckets {
 				s.reset()
 				convertEstimatorBucketToSnapshot(eb, s, skp)
-				for _, sk := range s.Sketches {
-					skp.put(sk)
+				for _, ssk := range s.Sketches {
+					skp.put(ssk.Sketch)
 				}
 			}
 		}
@@ -158,8 +158,8 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			for _, eb := range e.buckets {
 				s.reset()
 				convertEstimatorBucketToSnapshot(eb, s, skp)
-				for _, sk := range s.Sketches {
-					skp.put(sk)
+				for _, ssk := range s.Sketches {
+					skp.put(ssk.Sketch)
 				}
 			}
 		}

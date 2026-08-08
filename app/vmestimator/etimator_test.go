@@ -241,7 +241,6 @@ cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values
 cardinality_estimate{interval="1h0m0s",group_by_keys="__name__",group_by_values="the_metric_name",by__name__="the_metric_name"} 1000
 vmestimator_estimator_group_limit{interval="1h0m0s",group_by_keys="__group__",group_by_values="__name__"} 12345`,
 	)
-
 	// time series does not contribute to a group
 	f([]string{"foo"}, genCard(0, 10, 10, ""), `
 cardinality_estimate{interval="1h0m0s",group_by_keys="__group__",group_by_values="foo"} 0

@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"log"
 	"slices"
 	"sort"
 	"strconv"
@@ -63,12 +62,17 @@ type snapshot struct {
 	GroupRejectSize int64
 
 	// prom string metric => hll
-	Sketches map[string]*hyperloglog.Sketch
+	Sketches map[uint64]SnapshotSketch
+}
+
+type SnapshotSketch struct {
+	Values []string
+	Sketch *hyperloglog.Sketch
 }
 
 func newSnapshot() *snapshot {
 	return &snapshot{
-		Sketches: make(map[string]*hyperloglog.Sketch),
+		Sketches: make(map[uint64]SnapshotSketch),
 	}
 }
 
@@ -97,11 +101,14 @@ func (s *snapshot) merge(other *snapshot) {
 		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
 	}
 
-	for name, otherSK := range other.Sketches {
-		if existing, ok := s.Sketches[name]; ok {
-			_ = existing.Merge(otherSK)
+	for key, otherSSK := range other.Sketches {
+		if existingSSK, ok := s.Sketches[key]; ok {
+			_ = existingSSK.Sketch.Merge(otherSSK.Sketch)
 		} else {
-			s.Sketches[name] = otherSK.Clone()
+			s.Sketches[key] = SnapshotSketch{
+				Values: append([]string{}, otherSSK.Values...),
+				Sketch: otherSSK.Sketch.Clone(),
+			}
 		}
 	}
 
@@ -141,7 +148,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 	if len(s.GroupBy) == 0 {
 		tmpBuf = tmpBuf[:0]
 		tmpBuf = appendCardinalityEstimateGlobalMetric(tmpBuf, metricPrefix)
-		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[`__global__`].Estimate(), 10)
+		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[0].Sketch.Estimate(), 10)
 		tmpBuf = append(tmpBuf, "\n"...)
 		if _, err := w.Write(tmpBuf); err != nil {
 			return err
@@ -152,10 +159,10 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)
 	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
 
-	for vs, sk := range s.Sketches {
+	for _, ssk := range s.Sketches {
 		tmpBuf = tmpBuf[:0]
-		tmpBuf = appendCardinalityEstimateGroupMetrics(tmpBuf, metricPrefix, groupByKeysLabel, s.GroupBy, vs)
-		tmpBuf = strconv.AppendUint(tmpBuf, sk.Estimate(), 10)
+		tmpBuf = appendCardinalityEstimateGroupMetrics(tmpBuf, metricPrefix, groupByKeysLabel, s.GroupBy, ssk.Values)
+		tmpBuf = strconv.AppendUint(tmpBuf, ssk.Sketch.Estimate(), 10)
 		tmpBuf = append(tmpBuf, "\n"...)
 		if _, err := w.Write(tmpBuf); err != nil {
 			return err
@@ -174,11 +181,6 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 		*tmpBufP = tmpBuf
 		putFormatBuf(tmpBufP)
 	}()
-
-	log.Println(`--------------------`)
-	for vs, _ := range s.Sketches {
-		log.Println(vs)
-	}
 
 	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
@@ -234,7 +236,9 @@ func convertGlobalEstimatorToSnapshot(e *estimator, s *snapshot) *snapshot {
 		eb.mu.Unlock()
 	}
 
-	s.Sketches[`__global__`] = resSK
+	s.Sketches[0] = SnapshotSketch{
+		Sketch: resSK,
+	}
 	s.Interval = eb0.interval
 	s.Labels = eb0.labels
 	s.GroupBy = append(s.GroupBy[:0], eb0.groupBy...)
@@ -261,19 +265,25 @@ func convertEstimatorBucketToSnapshot(eb *estimatorBucket, s *snapshot, skp *ske
 	}
 
 	eb.mu.Lock()
-	for vs, sk := range eb.groups {
-		resSK := skp.getForMerge(sk)
-		eb.mergeSketches(sk, eb.prevGroups[vs], resSK)
-		s.Sketches[vs] = resSK
+	for key, ssk := range eb.groups {
+		resSK := skp.getForMerge(ssk.Sketch)
+		eb.mergeSketches(ssk.Sketch, eb.prevGroups[key].Sketch, resSK)
+		s.Sketches[key] = SnapshotSketch{
+			Values: ssk.values,
+			Sketch: resSK,
+		}
 	}
-	for vs := range eb.prevGroups {
-		if _, ok := eb.groups[vs]; ok {
+	for key := range eb.prevGroups {
+		if _, ok := eb.groups[key]; ok {
 			continue
 		}
-		prevSK := eb.prevGroups[vs]
-		resSK := skp.getForMerge(prevSK)
-		eb.mergeSketches(nil, prevSK, resSK)
-		s.Sketches[vs] = resSK
+		prevSSK := eb.prevGroups[key]
+		resSK := skp.getForMerge(prevSSK.Sketch)
+		eb.mergeSketches(nil, prevSSK.Sketch, resSK)
+		s.Sketches[key] = SnapshotSketch{
+			Values: prevSSK.values,
+			Sketch: resSK,
+		}
 	}
 	eb.mu.Unlock()
 
@@ -333,17 +343,17 @@ func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeys
 		*tmpBufP = tmpBuf
 		putFormatBuf(tmpBufP)
 	}()
-	for i := 0; i < values.Cap; i++ {
+	for i := 0; i < len(values); i++ {
 		if i > 0 {
 			tmpBuf = append(tmpBuf, ',')
 		}
 
-		tmpBuf = append(tmpBuf, []byte(values.Arr[i])...)
+		tmpBuf = append(tmpBuf, []byte(values[i])...)
 	}
 	buf = append(buf, `group_by_values=`...)
 	buf = strconv.AppendQuote(buf, bytesutil.ToUnsafeString(tmpBuf))
 
-	for i := 0; i < values.Cap; i++ {
+	for i := 0; i < len(values); i++ {
 		buf = append(buf, ',')
 		if keys[i] == `__name__` {
 			buf = append(buf, `by__name__`...)
@@ -354,7 +364,7 @@ func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeys
 			buf = append(buf, keys[i]...)
 		}
 		buf = append(buf, '=')
-		buf = strconv.AppendQuote(buf, values.Arr[i])
+		buf = strconv.AppendQuote(buf, values[i])
 	}
 
 	buf = append(buf, `} `...)
