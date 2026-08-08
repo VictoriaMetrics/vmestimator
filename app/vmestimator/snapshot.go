@@ -113,7 +113,12 @@ func (s *snapshot) merge(other *snapshot) {
 	}
 
 	s.Interval = other.Interval
-	s.Labels = other.Labels
+	for k, v := range other.Labels {
+		if s.Labels == nil {
+			s.Labels = make(map[string]string)
+		}
+		s.Labels[k] = v
+	}
 
 	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
 	s.GroupLimit = other.GroupLimit
@@ -210,7 +215,24 @@ func (s *snapshot) key() string {
 		groupByKey = strings.Join(s.GroupBy, ",")
 	}
 
-	return fmt.Sprintf("\u0000labels=%v\u0000group_by=%v\u0000interval=%v", s.Labels, groupByKey, s.Interval)
+	var labelsKey string
+	if len(s.Labels) > 0 {
+		keys := make([]string, 0, len(s.Labels))
+		for k := range s.Labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		for _, k := range keys {
+			b.WriteString(k)
+			b.WriteByte('=')
+			b.WriteString(s.Labels[k])
+			b.WriteByte('\x00')
+		}
+		labelsKey = b.String()
+	}
+
+	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v", labelsKey, groupByKey, s.Interval)
 }
 
 func (s *snapshot) reset() {
@@ -240,7 +262,12 @@ func convertGlobalEstimatorToSnapshot(e *estimator, s *snapshot) *snapshot {
 		Sketch: resSK,
 	}
 	s.Interval = eb0.interval
-	s.Labels = eb0.labels
+	for k, v := range eb0.labels {
+		if s.Labels == nil {
+			s.Labels = make(map[string]string)
+		}
+		s.Labels[k] = v
+	}
 	s.GroupBy = append(s.GroupBy[:0], eb0.groupBy...)
 
 	return s
@@ -290,7 +317,12 @@ func convertEstimatorBucketToSnapshot(eb *estimatorBucket, s *snapshot, skp *ske
 	s.GroupLimit = eb.groupSize.limit
 	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)
 	s.Interval = eb.interval
-	s.Labels = eb.labels
+	for k, v := range eb.labels {
+		if s.Labels == nil {
+			s.Labels = make(map[string]string)
+		}
+		s.Labels[k] = v
+	}
 
 	eb.groupSize.rejectMu.Lock()
 	if sk := eb.groupSize.rejectSketches[eb.idx]; sk != nil {
@@ -405,11 +437,8 @@ func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string,
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		for i, k := range keys {
-			if i > 0 {
-				buf = append(buf, ',')
-			}
-
+		for _, k := range keys {
+			buf = append(buf, ',')
 			buf = append(buf, k...)
 			buf = append(buf, '=')
 			buf = strconv.AppendQuote(buf, labels[k])

@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,7 +13,6 @@ import (
 	"github.com/dgryski/go-metro"
 	"github.com/valyala/fastrand"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
@@ -194,6 +192,7 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 
 		ts := tss[i]
 		d.Reset()
+		clear(groupValues)
 
 		// hasNames starts true when there are no explicit keys (pure __label__ mode).
 		hasNames := len(groupByKeys) == 0
@@ -388,10 +387,10 @@ func (eb *estimatorBucket) rotate() {
 
 func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues []string) {
 	eb.mu.Lock()
-	defer eb.mu.Unlock()
 
 	if len(eb.groupBy) == 0 {
 		eb.sketch.InsertHash(fp)
+		eb.mu.Unlock()
 		return
 	}
 
@@ -399,6 +398,7 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues 
 	if !ok {
 		if _, ok := eb.prevGroups[groupValuesKey]; !ok {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
+				eb.mu.Unlock()
 				return
 			}
 		}
@@ -410,6 +410,7 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues 
 		eb.groups[groupValuesKey] = gsk
 	}
 	gsk.InsertHash(fp)
+	eb.mu.Unlock()
 }
 
 func (eb *estimatorBucket) mergeSketches(cur, prev, res *hyperloglog.Sketch) {
@@ -528,40 +529,6 @@ func hash(v []byte) uint64 {
 	return metro.Hash64(v, 1337)
 }
 
-type values struct {
-	Cap int
-	Arr [10]string
-
-	hash uint64
-}
-
-func (vs values) Hash() uint64 {
-	if vs.hash > 0 {
-		return vs.hash
-	}
-
-	h := getDigest()
-	defer putDigest(h)
-
-	for i := 0; i < vs.Cap; i++ {
-		_, _ = h.Write(bytesutil.ToUnsafeBytes(vs.Arr[i]))
-	}
-	vs.hash = h.Sum64()
-	return vs.hash
-}
-
-func (vs values) Clone() values {
-	ck := values{
-		Cap: vs.Cap,
-	}
-
-	for i := 0; i < vs.Cap; i++ {
-		ck.Arr[i] = strings.Clone(vs.Arr[i])
-	}
-
-	return ck
-}
-
 func getDigest() *xxhash.Digest {
 	d := digestPool.Get()
 	if d == nil {
@@ -571,7 +538,7 @@ func getDigest() *xxhash.Digest {
 }
 
 func putDigest(d *xxhash.Digest) {
-	defer d.Reset()
+	d.Reset()
 	digestPool.Put(d)
 }
 

@@ -195,13 +195,15 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		labels := pregenerateLabels(100)
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: labels[i%100]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -219,13 +221,15 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		labels := pregenerateLabels(10_000)
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%10_000)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: labels[i%10_000]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -243,13 +247,15 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		labels := pregenerateLabels(100_000)
+
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100_000)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: labels[i%100_000]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -341,12 +347,13 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 // insertSeriesIntoEstimator inserts numSeries time series into e.
 // When groupsNum > 0 each series gets a "groupLabel" cycling through groupsNum values.
 func insertSeriesIntoEstimator(e *estimator, numSeries, groupsNum int) {
+	groupLabels := pregenerateLabels(groupsNum)
 	for i := 0; i < numSeries; i++ {
 		var labels []protoparser.Label
 		if groupsNum > 0 {
 			labels = append(labels, protoparser.Label{
 				Name:  "groupLabel",
-				Value: fmt.Sprintf("%d", i%groupsNum),
+				Value: groupLabels[i%groupsNum],
 			})
 		}
 		e.insertMany([]protoparser.TimeSerie{
@@ -356,4 +363,15 @@ func insertSeriesIntoEstimator(e *estimator, numSeries, groupsNum int) {
 			},
 		})
 	}
+}
+
+func pregenerateLabels(n int) []string {
+	if n == 0 {
+		return nil
+	}
+	labels := make([]string, n)
+	for i := range labels {
+		labels[i] = fmt.Sprintf("%d", i)
+	}
+	return labels
 }
