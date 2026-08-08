@@ -425,9 +425,13 @@ func (eb *estimatorBucket) rotate() {
 	}
 
 	eb.mu.Lock()
+	prevPrevGroups := eb.prevGroups
 	eb.prevGroups = eb.groups
 	eb.groups = make(map[uint64]groupSketch, len(eb.groups))
 	eb.groupSize.rotateLocked(eb.idx, int64(len(eb.prevGroups)))
+	for _, gsk := range prevPrevGroups {
+		gsk.Sketch.Release()
+	}
 	eb.mu.Unlock()
 }
 

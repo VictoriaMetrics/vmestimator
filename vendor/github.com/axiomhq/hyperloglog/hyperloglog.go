@@ -19,7 +19,7 @@ type Sketch struct {
 	p uint8
 	m uint32
 	// createdSparse records whether the sketch was originally created with sparse mode.
-	// Use sparse() to check current state.
+	// Use Sparse() to check current state.
 	createdSparse bool
 
 	alpha      float64
@@ -64,12 +64,12 @@ func NewSketch(precision uint8, sparse bool) (*Sketch, error) {
 		s.tmpSet = makeSet(0)
 		s.sparseList = getCompressedList(0)
 	} else {
-		s.regs = make([]uint8, m)
+		s.regs = getRegs(precision)
 	}
 	return s, nil
 }
 
-func (sk *Sketch) sparse() bool { return sk.sparseList != nil }
+func (sk *Sketch) Sparse() bool { return sk.sparseList != nil }
 
 // Clone returns a deep copy of sk.
 func (sk *Sketch) Clone() *Sketch {
@@ -81,7 +81,7 @@ func (sk *Sketch) Clone() *Sketch {
 }
 
 func (sk *Sketch) Reset() {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.tmpSet.reset()
 		sk.sparseList.reset()
 		return
@@ -90,11 +90,26 @@ func (sk *Sketch) Reset() {
 	if sk.createdSparse {
 		sk.tmpSet = makeSet(0)
 		sk.sparseList = getCompressedList(0)
+		putRegs(sk.regs, sk.p)
 		sk.regs = nil
 		return
 	}
 
 	clear(sk.regs)
+}
+
+// Release function releases internal resources.
+// Sketch must not be used after this function call.
+func (sk *Sketch) Release() {
+	sk.tmpSet = nilSet
+	if sk.sparseList != nil {
+		putCompressedList(sk.sparseList)
+		sk.sparseList = nil
+	}
+	if sk.regs != nil {
+		putRegs(sk.regs, sk.p)
+		sk.regs = nil
+	}
 }
 
 func (sk *Sketch) maybeToNormal() {
@@ -114,7 +129,7 @@ func (sk *Sketch) Merge(other *Sketch) error {
 		return errors.New("precisions must be equal")
 	}
 
-	if sk.sparse() && other.sparse() {
+	if sk.Sparse() && other.Sparse() {
 		sk.mergeSparseSketch(other)
 	} else {
 		sk.mergeDenseSketch(other)
@@ -131,11 +146,11 @@ func (sk *Sketch) mergeSparseSketch(other *Sketch) {
 }
 
 func (sk *Sketch) mergeDenseSketch(other *Sketch) {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.toNormal()
 	}
 
-	if other.sparse() {
+	if other.Sparse() {
 		other.tmpSet.ForEach(func(k uint32) {
 			i, r := decodeHash(k, other.p, pp)
 			sk.insert(i, r)
@@ -158,7 +173,7 @@ func (sk *Sketch) toNormal() {
 		sk.mergeSparse()
 	}
 
-	sk.regs = make([]uint8, sk.m)
+	sk.regs = getRegs(sk.p)
 	for iter := sk.sparseList.Iter(); iter.HasNext(); {
 		i, r := decodeHash(iter.Next(), sk.p, pp)
 		sk.insert(i, r)
@@ -173,7 +188,7 @@ func (sk *Sketch) insert(i uint32, r uint8) { sk.regs[i] = max(r, sk.regs[i]) }
 func (sk *Sketch) Insert(e []byte)          { sk.InsertHash(hash(e)) }
 
 func (sk *Sketch) InsertHash(x uint64) {
-	if sk.sparse() {
+	if sk.Sparse() {
 		if sk.tmpSet.add(encodeHash(x, sk.p, pp)) {
 			sk.maybeToNormal()
 		}
@@ -184,7 +199,7 @@ func (sk *Sketch) InsertHash(x uint64) {
 }
 
 func (sk *Sketch) Estimate() uint64 {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.mergeSparse()
 		return uint64(linearCount(mp, mp-sk.sparseList.count))
 	}
@@ -259,7 +274,7 @@ func (sk *Sketch) AppendBinary(data []byte) ([]byte, error) {
 	// Marshal b
 	data = append(data, 0)
 
-	if sk.sparse() {
+	if sk.Sparse() {
 		// It's using the sparse Sketch.
 		data = append(data, byte(1))
 
@@ -378,6 +393,34 @@ func (sk *Sketch) unmarshalBinaryV1(data []byte, b uint8) error {
 func (sk *Sketch) unmarshalBinaryV2(data []byte) error {
 	sk.regs = data[8:]
 	return nil
+}
+
+// regsPools is a tiered pool for regs slices, indexed by (precision - 4).
+// Precision ranges from 4 to 18, giving 15 tiers.
+var regsPools = newRegsPools()
+
+func newRegsPools() [15]*sync.Pool {
+	var pools [15]*sync.Pool
+	for i := range pools {
+		pools[i] = &sync.Pool{}
+	}
+	return pools
+}
+
+func getRegs(precision uint8) []uint8 {
+	pool := regsPools[precision-4]
+	if v := pool.Get(); v != nil {
+		return v.([]uint8)
+	}
+	return make([]uint8, 1<<precision)
+}
+
+func putRegs(r []uint8, precision uint8) {
+	if r == nil {
+		return
+	}
+	clear(r)
+	regsPools[precision-4].Put(r)
 }
 
 var compressedListPools = newCompressedListPools()
