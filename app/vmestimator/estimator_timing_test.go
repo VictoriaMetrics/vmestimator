@@ -3,11 +3,43 @@ package main
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
+
+func pregenerateLabels(n int) []string {
+	if n == 0 {
+		return nil
+	}
+	labels := make([]string, n)
+	for i := range labels {
+		labels[i] = fmt.Sprintf("%d", i)
+	}
+	return labels
+}
+
+// generateSeries returns numSeries pre-built TimeSeries.
+// When groupsNum > 0 each series gets a "groupLabel" cycling through groupsNum values.
+func generateSeries(numSeries, groupsNum int) []protoparser.TimeSerie {
+	groupLabels := pregenerateLabels(groupsNum)
+	series := make([]protoparser.TimeSerie, numSeries)
+	var buf []byte
+	for i := range series {
+		var labels []protoparser.Label
+		if groupsNum > 0 {
+			labels = []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%groupsNum]}}
+		}
+		buf = strconv.AppendInt(append(buf[:0], "foobarbaz"...), int64(i), 10)
+		series[i] = protoparser.TimeSerie{
+			Labels:      labels,
+			Fingerprint: hash(buf),
+		}
+	}
+	return series
+}
 
 func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 	b.Run("NoGroup/NoPrev", func(b *testing.B) {
@@ -16,7 +48,7 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 5_000, 0)
+		e.insertMany(generateSeries(5_000, 0))
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -31,11 +63,12 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 5_000, 0)
+		series := generateSeries(5_000, 0)
+		e.insertMany(series)
 		for _, eb := range e.buckets {
 			eb.rotate()
 		}
-		insertSeriesIntoEstimator(e, 5_000, 0)
+		e.insertMany(series)
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -53,7 +86,7 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 5_000, 100)
+		e.insertMany(generateSeries(5_000, 100))
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -71,11 +104,12 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 5_000, 100)
+		series := generateSeries(5_000, 100)
+		e.insertMany(series)
 		for _, eb := range e.buckets {
 			eb.rotate()
 		}
-		insertSeriesIntoEstimator(e, 5_000, 100)
+		e.insertMany(series)
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -93,7 +127,7 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 50_000, 10_000)
+		e.insertMany(generateSeries(50_000, 10_000))
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -111,11 +145,12 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
-		insertSeriesIntoEstimator(e, 50_000, 10_000)
+		series := generateSeries(50_000, 10_000)
+		e.insertMany(series)
 		for _, eb := range e.buckets {
 			eb.rotate()
 		}
-		insertSeriesIntoEstimator(e, 50_000, 10_000)
+		e.insertMany(series)
 
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -154,13 +189,14 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		groupLabels := pregenerateLabels(100)
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -178,13 +214,14 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		groupLabels := pregenerateLabels(10_000)
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%10_000)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%10_000]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -202,13 +239,14 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 		}
 		defer e.stop()
 
+		groupLabels := pregenerateLabels(100_000)
 		b.ResetTimer()
 		b.ReportAllocs()
 		b.RunParallel(func(pb *testing.PB) {
 			var i uint64
 			for pb.Next() {
 				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: fmt.Sprintf("%d", i%100_000)}},
+					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100_000]}},
 					Fingerprint: i,
 				}})
 				i++
@@ -229,10 +267,11 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		}
 		defer e.stop()
 
+		series := generateSeries(1_000, 0)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			insertSeriesIntoEstimator(e, 1_000, 0)
+			e.insertMany(series)
 			for i := range e.buckets {
 				e.buckets[i].rotate()
 			}
@@ -246,10 +285,11 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		}
 		defer e.stop()
 
+		series := generateSeries(30_000, 0)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			insertSeriesIntoEstimator(e, 30_000, 0)
+			e.insertMany(series)
 			for i := range e.buckets {
 				e.buckets[i].rotate()
 			}
@@ -266,10 +306,11 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		}
 		defer e.stop()
 
+		series := generateSeries(1_000, 100)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			insertSeriesIntoEstimator(e, 1_000, 100)
+			e.insertMany(series)
 			for i := range e.buckets {
 				e.buckets[i].rotate()
 			}
@@ -286,33 +327,14 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 		}
 		defer e.stop()
 
+		series := generateSeries(30_000, 100)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			insertSeriesIntoEstimator(e, 30_000, 100)
+			e.insertMany(series)
 			for i := range e.buckets {
 				e.buckets[i].rotate()
 			}
 		}
 	})
-}
-
-// insertSeriesIntoEstimator inserts numSeries time series into e.
-// When groupsNum > 0 each series gets a "groupLabel" cycling through groupsNum values.
-func insertSeriesIntoEstimator(e *estimator, numSeries, groupsNum int) {
-	for i := 0; i < numSeries; i++ {
-		var labels []protoparser.Label
-		if groupsNum > 0 {
-			labels = append(labels, protoparser.Label{
-				Name:  "groupLabel",
-				Value: fmt.Sprintf("%d", i%groupsNum),
-			})
-		}
-		e.insertMany([]protoparser.TimeSerie{
-			{
-				Labels:      labels,
-				Fingerprint: hash([]byte(fmt.Sprintf("foobarbaz%d", i))),
-			},
-		})
-	}
 }
