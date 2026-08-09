@@ -387,11 +387,12 @@ func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeys
 
 	for i := 0; i < len(values); i++ {
 		buf = append(buf, ',')
-		if keys[i] == `__name__` {
+		switch keys[i] {
+		case `__name__`:
 			buf = append(buf, `by__name__`...)
-		} else if keys[i] == `__label__` {
+		case `__label__`:
 			buf = append(buf, `by__label__`...)
-		} else {
+		default:
 			buf = append(buf, `by_`...)
 			buf = append(buf, keys[i]...)
 		}
