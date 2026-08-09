@@ -459,11 +459,9 @@ func newSketchesPool(precision uint8, size int) *sketchesPool {
 	p := &sketchesPool{
 		precision: precision,
 		sparseSKs: make([]*hyperloglog.Sketch, 0, size),
-		denseSKs:  make([]*hyperloglog.Sketch, 0, size),
 	}
 	for i := 0; i < size; i++ {
 		p.sparseSKs = append(p.sparseSKs, mustNewSketch(precision, true))
-		p.denseSKs = append(p.denseSKs, mustNewSketch(precision, false))
 	}
 	return p
 }
