@@ -244,7 +244,6 @@ func (s *snapshot) reset() {
 	clear(s.Sketches)
 }
 
-
 // appendCardinalityEstimateGlobalMetric produces:
 // 'cardinality_estimate{interval="5m",group_by_keys="__global__"} '
 func appendCardinalityEstimateGlobalMetric(buf []byte, metricPrefix string) []byte {
