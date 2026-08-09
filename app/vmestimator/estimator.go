@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -396,15 +397,24 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues 
 
 	gsk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		if _, ok := eb.prevGroups[groupValuesKey]; !ok {
+		var values []string
+		if prevGSK, ok := eb.prevGroups[groupValuesKey]; ok {
+			values = prevGSK.values
+		} else {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
 				eb.mu.Unlock()
 				return
 			}
 		}
 
+		if values == nil {
+			values = make([]string, len(groupValues))
+			for i, v := range groupValues {
+				values[i] = strings.Clone(v)
+			}
+		}
 		gsk = groupSketch{
-			values: append([]string{}, groupValues...),
+			values: values,
 			Sketch: eb.newSketch(),
 		}
 		eb.groups[groupValuesKey] = gsk
