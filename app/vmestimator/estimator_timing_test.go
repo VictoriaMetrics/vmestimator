@@ -161,98 +161,108 @@ func BenchmarkEstimator_WriteMetrics(b *testing.B) {
 }
 
 func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
-	b.Run("NoGroup", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
-		if err != nil {
-			b.Fatalf("newEstimator: %v", err)
+	f := func(sparse bool) {
+		benchName := "Sparse/"
+		if !sparse {
+			benchName = "Normal/"
 		}
-		defer e.stop()
 
-		b.ResetTimer()
-		b.ReportAllocs()
-		b.RunParallel(func(pb *testing.PB) {
-			var i uint64
-			for pb.Next() {
-				e.insertMany([]protoparser.TimeSerie{{Fingerprint: i}})
-				i++
+		b.Run(benchName+"NoGroup", func(b *testing.B) {
+			e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+			if err != nil {
+				b.Fatalf("newEstimator: %v", err)
 			}
-		})
-	})
+			defer e.stop()
 
-	b.Run("Group100", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{
-			GroupBy:  []string{"groupLabel"},
-			Interval: time.Hour,
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				var i uint64
+				for pb.Next() {
+					e.insertMany([]protoparser.TimeSerie{{Fingerprint: i}})
+					i++
+				}
+			})
 		})
-		if err != nil {
-			b.Fatalf("newEstimator: %v", err)
-		}
-		defer e.stop()
 
-		groupLabels := pregenerateLabels(100)
-		b.ResetTimer()
-		b.ReportAllocs()
-		b.RunParallel(func(pb *testing.PB) {
-			var i uint64
-			for pb.Next() {
-				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100]}},
-					Fingerprint: i,
-				}})
-				i++
+		b.Run(benchName+"Group100", func(b *testing.B) {
+			e, err := newEstimator(EstimatorConfig{
+				GroupBy:  []string{"groupLabel"},
+				Interval: time.Hour,
+			})
+			if err != nil {
+				b.Fatalf("newEstimator: %v", err)
 			}
-		})
-	})
+			defer e.stop()
 
-	b.Run("Group10k", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{
-			GroupBy:  []string{"groupLabel"},
-			Interval: time.Hour,
+			groupLabels := pregenerateLabels(100)
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				var i uint64
+				for pb.Next() {
+					e.insertMany([]protoparser.TimeSerie{{
+						Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100]}},
+						Fingerprint: i,
+					}})
+					i++
+				}
+			})
 		})
-		if err != nil {
-			b.Fatalf("newEstimator: %v", err)
-		}
-		defer e.stop()
 
-		groupLabels := pregenerateLabels(10_000)
-		b.ResetTimer()
-		b.ReportAllocs()
-		b.RunParallel(func(pb *testing.PB) {
-			var i uint64
-			for pb.Next() {
-				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%10_000]}},
-					Fingerprint: i,
-				}})
-				i++
+		b.Run(benchName+"Group10k", func(b *testing.B) {
+			e, err := newEstimator(EstimatorConfig{
+				GroupBy:  []string{"groupLabel"},
+				Interval: time.Hour,
+			})
+			if err != nil {
+				b.Fatalf("newEstimator: %v", err)
 			}
-		})
-	})
+			defer e.stop()
 
-	b.Run("Group100k", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{
-			GroupBy:  []string{"groupLabel"},
-			Interval: time.Hour,
+			groupLabels := pregenerateLabels(10_000)
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				var i uint64
+				for pb.Next() {
+					e.insertMany([]protoparser.TimeSerie{{
+						Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%10_000]}},
+						Fingerprint: i,
+					}})
+					i++
+				}
+			})
 		})
-		if err != nil {
-			b.Fatalf("newEstimator: %v", err)
-		}
-		defer e.stop()
 
-		groupLabels := pregenerateLabels(100_000)
-		b.ResetTimer()
-		b.ReportAllocs()
-		b.RunParallel(func(pb *testing.PB) {
-			var i uint64
-			for pb.Next() {
-				e.insertMany([]protoparser.TimeSerie{{
-					Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100_000]}},
-					Fingerprint: i,
-				}})
-				i++
+		b.Run(benchName+"Group100k", func(b *testing.B) {
+			e, err := newEstimator(EstimatorConfig{
+				GroupBy:  []string{"groupLabel"},
+				Interval: time.Hour,
+			})
+			if err != nil {
+				b.Fatalf("newEstimator: %v", err)
 			}
+			defer e.stop()
+
+			groupLabels := pregenerateLabels(100_000)
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				var i uint64
+				for pb.Next() {
+					e.insertMany([]protoparser.TimeSerie{{
+						Labels:      []protoparser.Label{{Name: "groupLabel", Value: groupLabels[i%100_000]}},
+						Fingerprint: i,
+					}})
+					i++
+				}
+			})
 		})
-	})
+	}
+
+	f(true)
+	f(false)
 }
 
 // BenchmarkEstimator_InsertRotateCycle benchmarks the insert→rotate→insert cycle
@@ -261,7 +271,10 @@ func BenchmarkEstimator_InsertManyParallel(b *testing.B) {
 //   - Normal: 30 000 series per interval (sketch converts to dense mode)
 func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 	b.Run("NoGroup/SparseHLL", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+		e, err := newEstimator(EstimatorConfig{
+			Interval:  time.Hour,
+			HLLSparse: new(true),
+		})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
 		}
@@ -279,7 +292,10 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 	})
 
 	b.Run("NoGroup/NormalHLL", func(b *testing.B) {
-		e, err := newEstimator(EstimatorConfig{Interval: time.Hour})
+		e, err := newEstimator(EstimatorConfig{
+			Interval:  time.Hour,
+			HLLSparse: new(false),
+		})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
 		}
@@ -298,15 +314,16 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 
 	b.Run("Group100/SparseHLL", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			GroupBy:  []string{"groupLabel"},
-			Interval: time.Hour,
+			GroupBy:   []string{"groupLabel"},
+			Interval:  time.Hour,
+			HLLSparse: new(true),
 		})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
 		}
 		defer e.stop()
 
-		series := generateSeries(1_000, 100)
+		series := generateSeries(30_000, 100)
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
@@ -319,8 +336,9 @@ func BenchmarkEstimator_InsertRotateCycle(b *testing.B) {
 
 	b.Run("Group100/NormalHLL", func(b *testing.B) {
 		e, err := newEstimator(EstimatorConfig{
-			GroupBy:  []string{"groupLabel"},
-			Interval: time.Hour,
+			GroupBy:   []string{"groupLabel"},
+			Interval:  time.Hour,
+			HLLSparse: new(false),
 		})
 		if err != nil {
 			b.Fatalf("newEstimator: %v", err)
