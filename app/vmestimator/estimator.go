@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
 	"io"
 	"strings"
@@ -253,31 +252,119 @@ func (e *estimator) reset() {
 	}
 }
 
-func (e *estimator) writeMetrics(w io.Writer) {
-	eb0 := e.buckets[0]
-
+// toSnapshot calls cb with a snapshot of the estimator's current state.
+// For group estimators, cb may be called multiple times — once per batch of up to 1000 groups.
+// The snapshot s is only valid for the duration of the cb call; it is reset and reused after cb returns.
+// If cb returns an error, toSnapshot aborts and returns that error.
+func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s := newSnapshot()
 	if len(e.groupBy) == 0 {
-		s = convertGlobalEstimatorToSnapshot(e, s)
-		if err := s.writeCardinalityEstimates(w); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		eb0 := e.buckets[0]
+		resSK := eb0.newSketch()
+		for _, eb := range e.buckets {
+			eb.mu.Lock()
+			eb.mergeSketches(eb.sketch, eb.prevSketch, resSK)
+			eb.mu.Unlock()
 		}
-		return
+		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
+		s.Interval = eb0.interval
+		s.Labels = eb0.labels
+		s.GroupBy = nil
+		return cb(s)
 	}
 
-	skp := newSketchesPool(eb0.precision, eb0.groupSize.avgBucketSize())
+	const batchSize = 1000
+
+	eb0 := e.buckets[0]
+	s.GroupLimit = eb0.groupSize.limit
+	s.GroupBy = eb0.groupBy
+	s.Interval = eb0.interval
+	s.Labels = eb0.labels
+
+	skp := newSketchesPool(eb0.precision, min(batchSize, eb0.groupSize.avgBucketSize()))
+	keys := make([]uint64, 0, batchSize)
+
 	for _, eb := range e.buckets {
-		s.reset()
-		convertEstimatorBucketToSnapshot(eb, s, skp)
-		if err := s.writeCardinalityEstimates(w); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		eb.mu.Lock()
+		groups := eb.groups
+		prevGroups := eb.prevGroups
+		keys = keys[:0]
+		for k := range groups {
+			keys = append(keys, k)
 		}
-		for _, ssk := range s.Sketches {
-			skp.put(ssk.Sketch)
+		for k := range prevGroups {
+			if _, ok := groups[k]; !ok {
+				keys = append(keys, k)
+			}
+		}
+		eb.mu.Unlock()
+
+		for i := 0; i < len(keys); i += batchSize {
+			end := min(i+batchSize, len(keys))
+			batch := keys[i:end]
+
+			eb.mu.Lock()
+			for _, key := range batch {
+				var resSK *hyperloglog.Sketch
+				var values []string
+				gsk := groups[key]
+				if gsk.Sketch != nil {
+					resSK = skp.getForMerge(gsk.Sketch)
+					values = gsk.values
+				}
+
+				prevGSK := prevGroups[key]
+				if prevGSK.Sketch != nil && resSK == nil {
+					resSK = skp.getForMerge(prevGSK.Sketch)
+					values = prevGSK.values
+				}
+
+				eb.mergeSketches(gsk.Sketch, prevGSK.Sketch, resSK)
+
+				s.Sketches[key] = SnapshotSketch{
+					Values: values,
+					Sketch: resSK,
+				}
+			}
+			eb.mu.Unlock()
+
+			if err := cb(s); err != nil {
+				return err
+			}
+
+			for k, ssk := range s.Sketches {
+				skp.put(ssk.Sketch)
+				delete(s.Sketches, k)
+			}
 		}
 	}
-	if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
+
+	// Always emit a final metadata-only snapshot so the decoder receives
+	// GroupBy/GroupLimit/GroupRejectSize even when there are no groups.
+	// GroupRejectSize is included here (not in per-batch snapshots) so that
+	// merging on the decoder side accumulates it exactly once.
+	s.GroupRejectSize = int64(eb0.groupSize.totalRejected())
+	return cb(s)
+}
+
+func (e *estimator) writeMetrics(w io.Writer) {
+	if err := e.toSnapshot(func(s *snapshot) error {
+		return s.writeCardinalityEstimates(w)
+	}); err != nil {
 		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+	}
+
+	if len(e.groupBy) > 0 {
+		eb0 := e.buckets[0]
+		s := &snapshot{
+			GroupBy:    eb0.groupBy,
+			Interval:   eb0.interval,
+			Labels:     eb0.labels,
+			GroupLimit: eb0.groupSize.limit,
+		}
+		if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
+			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		}
 	}
 }
 
@@ -305,34 +392,6 @@ func (e *estimator) runRotation(interval time.Duration) {
 			return
 		}
 	}
-}
-
-func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
-	if len(e.groupBy) == 0 {
-		s := newSnapshot()
-		if err := enc.Encode(convertGlobalEstimatorToSnapshot(e, s)); err != nil {
-			return fmt.Errorf("encode snapshot: %w", err)
-		}
-
-		return nil
-	}
-
-	eb0 := e.buckets[0]
-
-	skp := newSketchesPool(eb0.precision, eb0.groupSize.avgBucketSize())
-	s := newSnapshot()
-	for _, eb := range e.buckets {
-		s.reset()
-		convertEstimatorBucketToSnapshot(eb, s, skp)
-		if err := enc.Encode(s); err != nil {
-			return fmt.Errorf("encode snapshot: %w", err)
-		}
-		for _, ssk := range s.Sketches {
-			skp.put(ssk.Sketch)
-		}
-	}
-
-	return nil
 }
 
 type estimatorBucket struct {

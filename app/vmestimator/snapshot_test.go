@@ -55,15 +55,25 @@ func TestGlobalSnapshot(t *testing.T) {
 		expMetric := buf.String()
 
 		buf.Reset()
-		if err := convertGlobalEstimatorToSnapshot(e, newSnapshot()).writeMetrics(buf); err != nil {
-			t.Fatalf("convertGlobalEstimatorToSnapshot: %v", err)
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
-		assertMetricsSame(t, "convertGlobalEstimatorToSnapshot", expMetric, buf.String())
+		if err := s.writeMetrics(buf); err != nil {
+			t.Fatalf("failed to write metrics: %v", err)
+		}
+		assertMetricsSame(t, "toSnapshot", expMetric, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
@@ -217,15 +227,25 @@ func TestGroupSnapshot(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		if err := convertGroupToSnapshot(e, newSnapshot()).writeMetrics(buf); err != nil {
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
+		}
+		if err := s.writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
-		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
+		assertMetricsSame(t, "toSnapshot", expMetrics, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
@@ -469,16 +489,25 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		s := convertGroupToSnapshot(e, newSnapshot())
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
+		}
 		if err := s.writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
-		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
+		assertMetricsSame(t, "toSnapshot", expMetrics, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {

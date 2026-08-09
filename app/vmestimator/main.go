@@ -99,7 +99,9 @@ func main() {
 			bw := bufio.NewWriterSize(w, 64*1024)
 			enc := gob.NewEncoder(bw)
 			for _, e := range es {
-				if err := e.writeSnapshot(enc); err != nil {
+				if err := e.toSnapshot(func(s *snapshot) error {
+					return enc.Encode(s)
+				}); err != nil {
 					logger.Errorf("write snapshot binary: %s", err)
 				}
 			}
