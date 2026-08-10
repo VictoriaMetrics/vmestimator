@@ -413,11 +413,11 @@ max(cardinality_estimate) without (instance)
 
 ## Operational metrics
 
-When grouping is enabled, vmestimator exposes per-bucket operational metrics at `/metrics`:
+Each stream with a non-empty `group_by` exposes the following operational metrics at `/metrics`:
 
-- `vmestimator_estimator_group_size{group_by_keys, bucket}` — number of active groups in this bucket after the last rotation
-- `vmestimator_estimator_group_rejected_size{group_by_keys}` — estimated number of distinct group values rejected since the last rotation because `group_limit` was reached
-- `vmestimator_estimator_group_limit{group_by_keys, bucket}` — configured `group_limit` for this bucket
+* `vmestimator_estimator_group_size{interval, group_by_keys}` — the current number of unique `group_by_keys` held by the group.
+* `vmestimator_estimator_group_rejected_size{interval, group_by_keys}` — the number of unique `group_by_keys` rejected after the group reached its `group_limit`.
+* `vmestimator_estimator_group_limit{interval, group_by_keys}` — the maximum number of unique `group_by_keys` the group can hold, as configured by `group_limit`.
 
 Additionally, every stream (including non-grouped ones) exposes:
 
