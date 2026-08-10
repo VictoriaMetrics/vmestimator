@@ -55,15 +55,25 @@ func TestGlobalSnapshot(t *testing.T) {
 		expMetric := buf.String()
 
 		buf.Reset()
-		if err := convertNoGroupToSnapshot(e, nil).writeMetrics(buf); err != nil {
-			t.Fatalf("convertNoGroupToSnapshot: %v", err)
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
-		assertMetricsSame(t, "convertNoGroupToSnapshot", expMetric, buf.String())
+		if err := s.writeMetrics(buf); err != nil {
+			t.Fatalf("failed to write metrics: %v", err)
+		}
+		assertMetricsSame(t, "toSnapshot", expMetric, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
@@ -217,15 +227,25 @@ func TestGroupSnapshot(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		if err := convertGroupToSnapshot(e, nil).writeMetrics(buf); err != nil {
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
+		}
+		if err := s.writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
-		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
+		assertMetricsSame(t, "toSnapshot", expMetrics, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {
@@ -380,13 +400,11 @@ func TestGroupSnapshot(t *testing.T) {
 }
 
 func TestSnapshotsAdd(t *testing.T) {
-	makeSnapshot := func(groupByKeysLabel, filter string, interval time.Duration) *snapshot {
+	makeSnapshot := func(groupBy []string, filter string, interval time.Duration) *snapshot {
 		s := newSnapshot()
-		s.GroupByKeysLabel = groupByKeysLabel
-		s.Filter = filter
 		s.Interval = interval
-		s.MetricPrefix = "vm_"
-		s.GroupBy = []string{"foo"}
+		s.GroupBy = groupBy
+		s.Filter = filter
 		return s
 	}
 
@@ -403,86 +421,86 @@ func TestSnapshotsAdd(t *testing.T) {
 
 	// same group_by keys, same filter, same interval => merged into one
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
 	}, 1)
 
 	// same group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, "", 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
 	}, 2)
 
 	// different group_by keys, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="b"`, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 5*time.Minute),
 	}, 2)
 
 	// different group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="b"`, "", 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 10*time.Minute),
 	}, 2)
 
-	// three snapshots: two share keys+interval, third differs only by interval
+	// three snapshots: two share group_by+interval, third differs only by interval
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, "", 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
 	}, 2)
 
 	// all distinct (keys x interval)
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="b"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, "", 10*time.Minute),
-		makeSnapshot(`foo="b"`, "", 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
+		makeSnapshot([]string{`b`}, "", 10*time.Minute),
 	}, 4)
 
 	// same group_by keys, same filter, same interval => merged into one
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
 	}, 1)
 
 	// same group_by keys, different filter, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="y"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
 	}, 2)
 
 	// same group_by keys, one with filter one without, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, "", 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
 	}, 2)
 
 	// same filter, different group_by keys, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="b"`, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`b`}, `job="x"`, 5*time.Minute),
 	}, 2)
 
 	// same group_by keys, same filter, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="x"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 10*time.Minute),
 	}, 2)
 
 	// all three dimensions vary
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="b"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="y"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="x"`, 10*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`b`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 10*time.Minute),
 	}, 4)
 
 	// three snapshots: two share all three keys, third differs only by filter
 	f([]*snapshot{
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="x"`, 5*time.Minute),
-		makeSnapshot(`foo="a"`, `job="y"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
 	}, 2)
 }
 
@@ -517,16 +535,25 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		expMetrics := buf.String()
 
 		buf.Reset()
-		s := convertGroupToSnapshot(e, nil)
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
+		}
 		if err := s.writeMetrics(buf); err != nil {
 			t.Fatalf("failed to write metrics: %v", err)
 		}
-		assertMetricsSame(t, "convertGroupToSnapshot", expMetrics, buf.String())
+		assertMetricsSame(t, "toSnapshot", expMetrics, buf.String())
 
 		// test encode/decode snapshot produce same result
 		buf.Reset()
-		if err := e.writeSnapshot(gob.NewEncoder(buf)); err != nil {
-			t.Fatalf("writeSnapshot: %v", err)
+		enc := gob.NewEncoder(buf)
+		if err := e.toSnapshot(func(s *snapshot) error {
+			return enc.Encode(s)
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
 		}
 		ss := newSnapshots()
 		if err := decodeSnapshots(buf, func(s *snapshot) {

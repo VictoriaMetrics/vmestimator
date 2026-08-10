@@ -19,7 +19,7 @@ type Sketch struct {
 	p uint8
 	m uint32
 	// createdSparse records whether the sketch was originally created with sparse mode.
-	// Use sparse() to check current state.
+	// Use Sparse() to check current state.
 	createdSparse bool
 
 	alpha      float64
@@ -69,7 +69,7 @@ func NewSketch(precision uint8, sparse bool) (*Sketch, error) {
 	return s, nil
 }
 
-func (sk *Sketch) sparse() bool { return sk.sparseList != nil }
+func (sk *Sketch) Sparse() bool { return sk.sparseList != nil }
 
 // Clone returns a deep copy of sk.
 func (sk *Sketch) Clone() *Sketch {
@@ -81,7 +81,7 @@ func (sk *Sketch) Clone() *Sketch {
 }
 
 func (sk *Sketch) Reset() {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.tmpSet.reset()
 		sk.sparseList.reset()
 		return
@@ -114,7 +114,7 @@ func (sk *Sketch) Merge(other *Sketch) error {
 		return errors.New("precisions must be equal")
 	}
 
-	if sk.sparse() && other.sparse() {
+	if sk.Sparse() && other.Sparse() {
 		sk.mergeSparseSketch(other)
 	} else {
 		sk.mergeDenseSketch(other)
@@ -131,11 +131,11 @@ func (sk *Sketch) mergeSparseSketch(other *Sketch) {
 }
 
 func (sk *Sketch) mergeDenseSketch(other *Sketch) {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.toNormal()
 	}
 
-	if other.sparse() {
+	if other.Sparse() {
 		other.tmpSet.ForEach(func(k uint32) {
 			i, r := decodeHash(k, other.p, pp)
 			sk.insert(i, r)
@@ -173,7 +173,7 @@ func (sk *Sketch) insert(i uint32, r uint8) { sk.regs[i] = max(r, sk.regs[i]) }
 func (sk *Sketch) Insert(e []byte)          { sk.InsertHash(hash(e)) }
 
 func (sk *Sketch) InsertHash(x uint64) {
-	if sk.sparse() {
+	if sk.Sparse() {
 		if sk.tmpSet.add(encodeHash(x, sk.p, pp)) {
 			sk.maybeToNormal()
 		}
@@ -184,7 +184,7 @@ func (sk *Sketch) InsertHash(x uint64) {
 }
 
 func (sk *Sketch) Estimate() uint64 {
-	if sk.sparse() {
+	if sk.Sparse() {
 		sk.mergeSparse()
 		return uint64(linearCount(mp, mp-sk.sparseList.count))
 	}
@@ -259,7 +259,7 @@ func (sk *Sketch) AppendBinary(data []byte) ([]byte, error) {
 	// Marshal b
 	data = append(data, 0)
 
-	if sk.sparse() {
+	if sk.Sparse() {
 		// It's using the sparse Sketch.
 		data = append(data, byte(1))
 
