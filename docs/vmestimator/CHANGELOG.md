@@ -16,7 +16,7 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
-**Update Note 1:** The version introduce a breaking change in cluster protocol. Please update everything to the latest version in one go and ignore errors during deployment.
+**Update Note 1:** This version introduces a breaking change in the cluster protocol. Please update everything to the latest version in one go and ignore errors during deployment.
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): decouple metrics generation logic from estimator. Do it via snapshot. This refactoring opens ways to implement upcoming profiler related features. 
 * BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): revert prev sketches reuse of HLL sketches as it hurts estimate precision. 
