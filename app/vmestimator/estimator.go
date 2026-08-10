@@ -117,10 +117,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		e.buckets[i] = eb
 	}
 
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(string(appendGroupLimitMetric(nil, cfg.GroupBy, cfg.Interval)), func() float64 {
 		return float64(e.groupSize.limit)
 	})
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(string(appendGroupSizeMetric(nil, cfg.GroupBy, cfg.Interval)), func() float64 {
 		return float64(e.groupSize.totalSize())
 	})
 

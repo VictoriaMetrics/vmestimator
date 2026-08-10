@@ -274,6 +274,17 @@ func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) [
 	return buf
 }
 
+// appendGroupSizeMetric produces:
+// 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
+func appendGroupSizeMetric(buf []byte, keys []string, interval time.Duration) []byte {
+	buf = buf[:0]
+	buf = append(buf, `vmestimator_estimator_group_size{interval="`...)
+	buf = append(buf, interval.String()...)
+	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
+	buf = append(buf, `} `...)
+	return buf
+}
+
 // appendCardinalityEstimateGroupMetrics produces:
 // 'cardinality_estimate{interval="5m",group_by_keys="fooKey,barKey",group_by_values='fooVal,BarVal',by_fooKey="fooVal",by_barKey="barVal"} '
 func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeysLabel string, keys, values []string) []byte {
