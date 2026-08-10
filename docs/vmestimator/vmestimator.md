@@ -210,10 +210,10 @@ cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",grou
 
 For `__label__` streams, the group value is the label name and `by__label__` holds it:
 ```
-cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="__label__"} 3
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="job",by__label__="job"} 12
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="instance",by__label__="instance"} 87
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="__label__"} 3
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="job",by__label__="job"} 12
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="instance",by__label__="instance"} 87
 ```
 
 > Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached

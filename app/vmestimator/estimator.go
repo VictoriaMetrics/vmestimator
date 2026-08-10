@@ -377,6 +377,7 @@ func (e *estimator) writeMetrics(w io.Writer) {
 		s := &snapshot{
 			GroupBy:    eb0.groupBy,
 			Interval:   eb0.interval,
+			Filter:     eb0.filter,
 			Labels:     eb0.labels,
 			GroupLimit: eb0.groupSize.limit,
 		}
