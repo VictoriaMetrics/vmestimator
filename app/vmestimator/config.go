@@ -45,7 +45,7 @@ func loadConfig(path string) ([]*estimator, error) {
 	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
 		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
 	}
-	for _, stream := range cfg.Streams {
+	for i, stream := range cfg.Streams {
 		sort.Strings(stream.GroupBy)
 		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
 			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
@@ -66,6 +66,7 @@ func loadConfig(path string) ([]*estimator, error) {
 			newGroupBy = append(newGroupBy, labelKeyword)
 		}
 		stream.GroupBy = newGroupBy
+		cfg.Streams[i] = stream
 	}
 
 	reservedLabels := map[string]bool{
