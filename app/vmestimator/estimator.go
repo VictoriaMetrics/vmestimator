@@ -1,21 +1,18 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
 	"io"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/axiomhq/hyperloglog"
+	"github.com/cespare/xxhash/v2"
 	"github.com/dgryski/go-metro"
 	"github.com/valyala/fastrand"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
@@ -25,9 +22,8 @@ import (
 const labelKeyword = "__label__"
 
 type estimator struct {
-	groupBy          []string
-	groupByKeysLabel string
-	groupSize        *groupSize
+	groupBy   []string
+	groupSize *groupSize
 
 	hasLabelKeyword bool
 
@@ -57,27 +53,16 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		cfg.HLLSparse = new(true)
 	}
 
-	metricPrefix := fmt.Sprintf("cardinality_estimate{interval=%q", cfg.Interval)
-	if len(cfg.Labels) > 0 {
-		keys := make([]string, 0, len(cfg.Labels))
-		for k := range cfg.Labels {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			metricPrefix += fmt.Sprintf(",%s=%q", k, cfg.Labels[k])
-		}
+	if len(cfg.GroupBy) > 5 {
+		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
 	}
 
-	groupByKeysLabel := "__global__"
 	if len(cfg.GroupBy) > 0 {
 		for _, k := range cfg.GroupBy {
 			if k == `__global__` || k == `__group__` {
 				return nil, fmt.Errorf("group by %s is not allowed. __global__, __group__ are reserved keywords", k)
 			}
 		}
-
-		groupByKeysLabel = strings.Join(cfg.GroupBy, `,`)
 	}
 
 	if len(cfg.GroupBy) > 0 {
@@ -89,9 +74,8 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e := &estimator{
-		groupBy:          cfg.GroupBy,
-		groupByKeysLabel: groupByKeysLabel,
-		hasLabelKeyword:  len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
+		groupBy:         cfg.GroupBy,
+		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		groupSize: &groupSize{
 			limit:          int64(cfg.GroupLimit),
 			bucketSizes:    make([]int64, cfg.Buckets),
@@ -102,22 +86,21 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		stopCh:     make(chan struct{}),
 	}
 
+	groupByKeysLabel := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_values`, cfg.GroupBy)
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{%s,interval=%q}`, groupByKeysLabel, cfg.Interval),
 	)
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalRejected())
 	})
 
 	for i := 0; i < len(e.buckets); i++ {
 		eb := &estimatorBucket{
-			idx:              i,
-			groupSize:        e.groupSize,
-			groupBy:          cfg.GroupBy,
-			extraLabels:      cfg.Labels,
-			interval:         cfg.Interval,
-			metricPrefix:     metricPrefix,
-			groupByKeysLabel: groupByKeysLabel,
+			idx:       i,
+			groupSize: e.groupSize,
+			groupBy:   cfg.GroupBy,
+			interval:  cfg.Interval,
+			labels:    cfg.Labels,
 
 			precision:       cfg.HLLPrecision,
 			sparse:          *cfg.HLLSparse,
@@ -134,10 +117,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		e.buckets[i] = eb
 	}
 
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.limit)
 	})
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{group_by_keys=%q,interval=%q}`, e.groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
 		return float64(e.groupSize.totalSize())
 	})
 
@@ -153,25 +136,25 @@ func (e *estimator) stop() {
 	e.metricsSet.UnregisterAllMetrics()
 }
 
-var groupValuesPool = sync.Pool{}
+var formatBufPool = sync.Pool{}
 
-func getGroupValuesKeySlice() *[]byte {
-	v0 := groupValuesPool.Get()
+func getFormatBuf() *[]byte {
+	v0 := formatBufPool.Get()
 	if v0 == nil {
-		v := make([]byte, 0, 128)
+		v := make([]byte, 0, 1024)
 		return &v
 	}
 
 	return v0.(*[]byte)
 }
 
-func putGroupValuesSlice(key *[]byte) {
+func putFormatBuf(key *[]byte) {
 	if key == nil {
 		return
 	}
 
 	*key = (*key)[:0]
-	groupValuesPool.Put(key)
+	formatBufPool.Put(key)
 }
 
 func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
@@ -192,20 +175,15 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	}
 
 	var cnt int
-	groupValuesKeyP := getGroupValuesKeySlice()
-	groupValuesKey := *groupValuesKeyP
-	defer func() {
-		*groupValuesKeyP = groupValuesKey
-		putGroupValuesSlice(groupValuesKeyP)
-	}()
-
-	groupValues := make([]string, len(e.groupBy))
-
 	// When __label__ is present it is always the last element; iterate only the explicit keys.
 	groupByKeys := e.groupBy
+	groupValues := make([]string, len(e.groupBy))
 	if e.hasLabelKeyword {
 		groupByKeys = e.groupBy[:len(e.groupBy)-1]
 	}
+
+	d := getDigest()
+	defer putDigest(d)
 
 	tssLen := uint32(len(tss))
 	start := fastrand.Uint32n(tssLen)
@@ -213,21 +191,18 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		i := (start + j) % tssLen
 
 		ts := tss[i]
-
-		groupValuesKey = groupValuesKey[:0]
+		d.Reset()
 		clear(groupValues)
+
 		// hasNames starts true when there are no explicit keys (pure __label__ mode).
 		hasNames := len(groupByKeys) == 0
 		for i, labelName := range groupByKeys {
-			if i > 0 {
-				groupValuesKey = append(groupValuesKey, ',')
-			}
-
 			for _, l := range ts.Labels {
 				if l.Name == labelName {
 					hasNames = true
 
-					groupValuesKey = append(groupValuesKey, l.Value...)
+					_, _ = d.WriteString("\u0000")
+					_, _ = d.WriteString(l.Value)
 					groupValues[i] = l.Value
 					break
 				}
@@ -239,30 +214,31 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			continue
 		}
 
-		groupValuesKeyHash := hash(groupValuesKey)
 		if !e.hasLabelKeyword {
-			bi := int(groupValuesKeyHash % bucketsNum)
-			e.buckets[bi].insert(ts.Fingerprint, groupValuesKeyHash, groupValues)
+			key := d.Sum64()
+			bi := int(key % bucketsNum)
+			e.buckets[bi].insert(ts.Fingerprint, key, groupValues)
 			cnt++
 			continue
 		}
 
 		// __label__ expansion: one insert per label in the series.
-		explicitKeyLen := len(groupValuesKey)
-		lastIdx := len(e.groupBy) - 1
+		labelIdx := len(e.groupBy) - 1
 		for _, label := range ts.Labels {
+			ld := *d
+			if len(groupByKeys) > 0 {
+				_, _ = ld.WriteString("\u0000")
+			}
+
 			if label.Fingerprint == 0 {
 				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
 			}
-			groupValuesKey = groupValuesKey[:explicitKeyLen]
-			if explicitKeyLen > 0 {
-				groupValuesKey = append(groupValuesKey, ',')
-			}
-			groupValuesKey = append(groupValuesKey, label.Name...)
-			groupValues[lastIdx] = label.Name
-			groupValuesKeyHash := hash(groupValuesKey)
-			bi := int(groupValuesKeyHash % bucketsNum)
-			e.buckets[bi].insert(label.Fingerprint, groupValuesKeyHash, groupValues)
+			_, _ = ld.WriteString(label.Name)
+			groupValues[labelIdx] = label.Name
+
+			key := ld.Sum64()
+			bi := int(key % bucketsNum)
+			e.buckets[bi].insert(label.Fingerprint, key, groupValues)
 			cnt++
 		}
 	}
@@ -276,48 +252,119 @@ func (e *estimator) reset() {
 	}
 }
 
-func (e *estimator) writeMetrics(w io.Writer) {
-	eb0 := e.buckets[0]
-
+// toSnapshot calls cb with a snapshot of the estimator's current state.
+// For group estimators, cb may be called multiple times — once per batch of up to 1000 groups.
+// The snapshot s is only valid for the duration of the cb call; it is reset and reused after cb returns.
+// If cb returns an error, toSnapshot aborts and returns that error.
+func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
+	s := newSnapshot()
 	if len(e.groupBy) == 0 {
-		formatBuf := make([]byte, 0, 1024)
+		eb0 := e.buckets[0]
 		resSK := eb0.newSketch()
 		for _, eb := range e.buckets {
-			eb.writeNoGroupMetric(resSK)
+			eb.mu.Lock()
+			eb.mergeSketches(eb.sketch, eb.prevSketch, resSK)
+			eb.mu.Unlock()
 		}
+		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
+		s.Interval = eb0.interval
+		s.Labels = eb0.labels
+		s.GroupBy = nil
+		return cb(s)
+	}
 
-		formatBuf = appendGlobalMetric(formatBuf, eb0.metricPrefix)
-		formatBuf = strconv.AppendUint(formatBuf, resSK.Estimate(), 10)
-		formatBuf = append(formatBuf, "\n"...)
-		if _, err := w.Write(formatBuf); err != nil {
+	const batchSize = 1000
+
+	eb0 := e.buckets[0]
+	s.GroupLimit = eb0.groupSize.limit
+	s.GroupBy = eb0.groupBy
+	s.Interval = eb0.interval
+	s.Labels = eb0.labels
+
+	skp := newSketchesPool(eb0.precision, min(batchSize, eb0.groupSize.avgBucketSize()))
+	keys := make([]uint64, 0, batchSize)
+
+	for _, eb := range e.buckets {
+		eb.mu.Lock()
+		groups := eb.groups
+		prevGroups := eb.prevGroups
+		keys = keys[:0]
+		for k := range groups {
+			keys = append(keys, k)
+		}
+		for k := range prevGroups {
+			if _, ok := groups[k]; !ok {
+				keys = append(keys, k)
+			}
+		}
+		eb.mu.Unlock()
+
+		for i := 0; i < len(keys); i += batchSize {
+			end := min(i+batchSize, len(keys))
+			batch := keys[i:end]
+
+			eb.mu.Lock()
+			for _, key := range batch {
+				var resSK *hyperloglog.Sketch
+				var values []string
+				gsk := groups[key]
+				if gsk.Sketch != nil {
+					resSK = skp.getForMerge(gsk.Sketch)
+					values = gsk.values
+				}
+
+				prevGSK := prevGroups[key]
+				if prevGSK.Sketch != nil && resSK == nil {
+					resSK = skp.getForMerge(prevGSK.Sketch)
+					values = prevGSK.values
+				}
+
+				eb.mergeSketches(gsk.Sketch, prevGSK.Sketch, resSK)
+
+				s.Sketches[key] = SnapshotSketch{
+					Values: values,
+					Sketch: resSK,
+				}
+			}
+			eb.mu.Unlock()
+
+			if err := cb(s); err != nil {
+				return err
+			}
+
+			for k, ssk := range s.Sketches {
+				skp.put(ssk.Sketch)
+				delete(s.Sketches, k)
+			}
+		}
+	}
+
+	// Always emit a final metadata-only snapshot so the decoder receives
+	// GroupBy/GroupLimit/GroupRejectSize even when there are no groups.
+	// GroupRejectSize is included here (not in per-batch snapshots) so that
+	// merging on the decoder side accumulates it exactly once.
+	s.GroupRejectSize = int64(eb0.groupSize.totalRejected())
+	return cb(s)
+}
+
+func (e *estimator) writeMetrics(w io.Writer) {
+	if err := e.toSnapshot(func(s *snapshot) error {
+		return s.writeCardinalityEstimates(w)
+	}); err != nil {
+		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+	}
+
+	if len(e.groupBy) > 0 {
+		eb0 := e.buckets[0]
+		s := &snapshot{
+			GroupBy:    eb0.groupBy,
+			Interval:   eb0.interval,
+			Labels:     eb0.labels,
+			GroupLimit: eb0.groupSize.limit,
+		}
+		if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
 			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 		}
-		return
-	}
-
-	formatBuf := make([]byte, 0, 16384)
-	formatBuf = appendGroupByKeysAndValuesPrefix(formatBuf, eb0.metricPrefix, eb0.groupByKeysLabel)
-
-	prefixLen := len(formatBuf)
-	resSK := eb0.newSketch()
-	for _, eb := range e.buckets {
-		formatBuf = eb.writeGroupMetrics(w, resSK, formatBuf[:prefixLen])
-	}
-
-	formatBuf = formatBuf[:0]
-	formatBuf = appendGroupMetric(formatBuf, eb0.metricPrefix, eb0.groupByKeysLabel)
-	formatBuf = strconv.AppendInt(formatBuf, eb0.groupSize.totalSize(), 10)
-	formatBuf = append(formatBuf, "\n"...)
-	if _, err := w.Write(formatBuf); err != nil {
-		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
-	}
-
-	formatBuf = formatBuf[:0]
-	formatBuf = appendGroupLimitMetric(formatBuf, eb0.groupByKeysLabel, eb0.interval)
-	formatBuf = strconv.AppendInt(formatBuf, eb0.groupSize.limit, 10)
-	formatBuf = append(formatBuf, "\n"...)
-	if _, err := w.Write(formatBuf); err != nil {
-		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 	}
 }
 
@@ -347,44 +394,16 @@ func (e *estimator) runRotation(interval time.Duration) {
 	}
 }
 
-func (e *estimator) writeSnapshot(enc *gob.Encoder) error {
-	if len(e.groupBy) == 0 {
-		s := newSnapshot()
-		if err := enc.Encode(convertNoGroupToSnapshot(e, s)); err != nil {
-			return fmt.Errorf("encode snapshot: %w", err)
-		}
-
-		return nil
-	}
-
-	eb0 := e.buckets[0]
-
-	formatBuf := make([]byte, 0, 16384)
-	formatBuf = appendGroupByKeysAndValuesPrefix(formatBuf, eb0.metricPrefix, eb0.groupByKeysLabel)
-
-	s := newSnapshot()
-	for _, eb := range e.buckets {
-		s.reset()
-		if err := enc.Encode(convertGroupBucketToSnapshot(eb, s, formatBuf)); err != nil {
-			return fmt.Errorf("encode snapshot: %w", err)
-		}
-	}
-
-	return nil
-}
-
 type estimatorBucket struct {
 	mu sync.Mutex
 
-	idx              int
-	groupBy          []string
-	extraLabels      map[string]string
-	interval         time.Duration
-	metricPrefix     string
-	groupByKeysLabel string
-	precision        uint8
-	sparse           bool
-	hasLabelKeyword  bool
+	idx             int
+	groupBy         []string
+	interval        time.Duration
+	precision       uint8
+	sparse          bool
+	labels          map[string]string
+	hasLabelKeyword bool
 
 	sketch     *hyperloglog.Sketch
 	prevSketch *hyperloglog.Sketch
@@ -392,11 +411,6 @@ type estimatorBucket struct {
 	groupSize  *groupSize
 	groups     map[uint64]groupSketch
 	prevGroups map[uint64]groupSketch
-}
-
-func (eb *estimatorBucket) String() string {
-	return fmt.Sprintf(
-		"interval: %s; group_by: %v; extra_labels: %v", eb.interval, eb.groupBy, eb.extraLabels)
 }
 
 func (eb *estimatorBucket) reset() {
@@ -433,113 +447,39 @@ func (eb *estimatorBucket) rotate() {
 
 func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues []string) {
 	eb.mu.Lock()
-	defer eb.mu.Unlock()
 
 	if len(eb.groupBy) == 0 {
 		eb.sketch.InsertHash(fp)
+		eb.mu.Unlock()
 		return
 	}
 
 	gsk, ok := eb.groups[groupValuesKey]
 	if !ok {
-		var groupValueLabels string
-		if prevGSK, ok := eb.prevGroups[groupValuesKey]; !ok {
+		var values []string
+		if prevGSK, ok := eb.prevGroups[groupValuesKey]; ok {
+			values = prevGSK.values
+		} else {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
+				eb.mu.Unlock()
 				return
 			}
+		}
 
-			tmpBufP := getGroupValuesKeySlice()
-			tmpBuf := *tmpBufP
-			defer func() {
-				*tmpBufP = tmpBuf
-				putGroupValuesSlice(tmpBufP)
-			}()
-
+		if values == nil {
+			values = make([]string, len(groupValues))
 			for i, v := range groupValues {
-				if i > 0 {
-					tmpBuf = append(tmpBuf, ',')
-				}
-				tmpBuf = append(tmpBuf, v...)
+				values[i] = strings.Clone(v)
 			}
-
-			formatBuf := make([]byte, 0, 1024)
-			formatBuf = strconv.AppendQuote(formatBuf, bytesutil.ToUnsafeString(tmpBuf))
-			for i := range groupValues {
-				formatBuf = append(formatBuf, ',')
-				switch eb.groupBy[i] {
-				case `__name__`:
-					formatBuf = append(formatBuf, `by__name__`...)
-				case labelKeyword:
-					formatBuf = append(formatBuf, `by__label__`...)
-				default:
-					formatBuf = append(formatBuf, `by_`...)
-					formatBuf = append(formatBuf, eb.groupBy[i]...)
-				}
-				formatBuf = append(formatBuf, '=')
-				formatBuf = strconv.AppendQuote(formatBuf, groupValues[i])
-			}
-			formatBuf = append(formatBuf, `} `...)
-
-			groupValueLabels = bytesutil.ToUnsafeString(formatBuf)
-		} else {
-			groupValueLabels = prevGSK.groupValueLabels
 		}
-
 		gsk = groupSketch{
-			groupValueLabels: groupValueLabels,
-			Sketch:           eb.newSketch(),
+			values: values,
+			Sketch: eb.newSketch(),
 		}
-
 		eb.groups[groupValuesKey] = gsk
 	}
 	gsk.InsertHash(fp)
-}
-
-func (eb *estimatorBucket) writeNoGroupMetric(res *hyperloglog.Sketch) {
-	eb.mu.Lock()
-	defer eb.mu.Unlock()
-
-	eb.mergeSketches(eb.sketch, eb.prevSketch, res)
-}
-
-func (eb *estimatorBucket) writeGroupMetrics(w io.Writer, res *hyperloglog.Sketch, formatBuf []byte) []byte {
-	eb.mu.Lock()
-	defer eb.mu.Unlock()
-
-	prefixLen := len(formatBuf)
-
-	for valuesKey, gsk := range eb.groups {
-		res.Reset()
-		formatBuf = append(formatBuf[:prefixLen], gsk.groupValueLabels...)
-
-		eb.mergeSketches(gsk.Sketch, eb.prevGroups[valuesKey].Sketch, res)
-		formatBuf = strconv.AppendUint(formatBuf, res.Estimate(), 10)
-		formatBuf = append(formatBuf, "\n"...)
-		if _, err := w.Write(formatBuf); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
-		}
-	}
-
-	for valuesKey := range eb.prevGroups {
-		if _, ok := eb.groups[valuesKey]; ok {
-			continue
-		}
-
-		res.Reset()
-		formatBuf = formatBuf[:prefixLen]
-
-		gsk := eb.prevGroups[valuesKey]
-		formatBuf = append(formatBuf, gsk.groupValueLabels...)
-
-		eb.mergeSketches(nil, eb.prevGroups[valuesKey].Sketch, res)
-		formatBuf = strconv.AppendUint(formatBuf, res.Estimate(), 10)
-		formatBuf = append(formatBuf, "\n"...)
-		if _, err := w.Write(formatBuf); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
-		}
-	}
-
-	return formatBuf[:prefixLen]
+	eb.mu.Unlock()
 }
 
 func (eb *estimatorBucket) mergeSketches(cur, prev, res *hyperloglog.Sketch) {
@@ -558,9 +498,9 @@ func (eb *estimatorBucket) newSketch() *hyperloglog.Sketch {
 }
 
 type groupSketch struct {
-	groupValueLabels string
-
 	*hyperloglog.Sketch
+
+	values []string
 }
 
 type groupSize struct {
@@ -637,6 +577,10 @@ func (gs *groupSize) totalRejected() uint64 {
 	return rejectSize
 }
 
+func (gs *groupSize) avgBucketSize() int {
+	return int(gs.size.Load()) / len(gs.bucketSizes)
+}
+
 func mustNewGroupRejectSketch() *hyperloglog.Sketch {
 	return mustNewSketch(10, true)
 }
@@ -654,42 +598,17 @@ func hash(v []byte) uint64 {
 	return metro.Hash64(v, 1337)
 }
 
-// appendGlobalMetric produces:
-// 'cardinality_estimate{interval="5m",group_by_keys="__global__"} '
-func appendGlobalMetric(buf []byte, metricPrefix string) []byte {
-	buf = append(buf, metricPrefix...)
-	buf = append(buf, `,group_by_keys="__global__"} `...)
-	return buf
+func getDigest() *xxhash.Digest {
+	d := digestPool.Get()
+	if d == nil {
+		return xxhash.New()
+	}
+	return d.(*xxhash.Digest)
 }
 
-// appendGroupMetric produces:
-// 'cardinality_estimate{interval="5m",group_by_keys="__group__",group_by_values="fooKey,barKey"} '
-func appendGroupMetric(buf []byte, metricPrefix, groupByKeysLabel string) []byte {
-	buf = append(buf, metricPrefix...)
-	buf = append(buf, `,group_by_keys="__group__",group_by_values="`...)
-	buf = append(buf, groupByKeysLabel...)
-	buf = append(buf, `"} `...)
-	return buf
+func putDigest(d *xxhash.Digest) {
+	d.Reset()
+	digestPool.Put(d)
 }
 
-// appendGroupLimitMetric produces:
-// 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
-func appendGroupLimitMetric(buf []byte, groupByKeysLabel string, interval time.Duration) []byte {
-	buf = buf[:0]
-	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
-	buf = append(buf, interval.String()...)
-	buf = append(buf, `",group_by_keys="__group__",group_by_values="`...)
-	buf = append(buf, groupByKeysLabel...)
-	buf = append(buf, `"} `...)
-	return buf
-}
-
-// appendGroupByKeysAndValuesPrefix produces:
-// 'cardinality_estimate{interval="5m",group_by_keys="fooKey,barKey",group_by_values='
-func appendGroupByKeysAndValuesPrefix(buf []byte, metricPrefix, groupByKeysLabel string) []byte {
-	buf = append(buf, metricPrefix...)
-	buf = append(buf, `,group_by_keys="`...)
-	buf = append(buf, groupByKeysLabel...)
-	buf = append(buf, `",group_by_values=`...)
-	return buf
-}
+var digestPool sync.Pool

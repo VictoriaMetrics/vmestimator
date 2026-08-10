@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
+	"slices"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,15 +29,15 @@ func (ss *snapshots) add(newS *snapshot) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	key := newS.GroupByKeysLabel + "\x00" + newS.Interval.String()
-	if s, found := ss.m[key]; found {
+	k := newS.key()
+	if s, found := ss.m[k]; found {
 		s.merge(newS)
 		return
 	}
 
 	s := newSnapshot()
 	s.merge(newS)
-	ss.m[key] = s
+	ss.m[k] = s
 }
 
 func (ss *snapshots) writeMetrics(w io.Writer) error {
@@ -50,19 +54,25 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 }
 
 type snapshot struct {
-	MetricPrefix     string
-	Interval         time.Duration
-	GroupByKeysLabel string
-	RejectSize       int64
-	GroupBy          []string
-	GroupLimit       int64
+	Interval time.Duration
+	Labels   map[string]string
+
+	GroupBy         []string
+	GroupLimit      int64
+	GroupRejectSize int64
+
 	// prom string metric => hll
-	Sketches map[string]*hyperloglog.Sketch
+	Sketches map[uint64]SnapshotSketch
+}
+
+type SnapshotSketch struct {
+	Values []string
+	Sketch *hyperloglog.Sketch
 }
 
 func newSnapshot() *snapshot {
 	return &snapshot{
-		Sketches: make(map[string]*hyperloglog.Sketch),
+		Sketches: make(map[uint64]SnapshotSketch),
 	}
 }
 
@@ -84,166 +94,325 @@ func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
 }
 
 func (s *snapshot) merge(other *snapshot) {
-	if s.GroupByKeysLabel != "" && s.GroupByKeysLabel != other.GroupByKeysLabel {
-		logger.Panicf("BUG: merge snapshots must have the same groupByKeysLabel; s: %s; other: %s", s.GroupByKeysLabel, other.GroupByKeysLabel)
+	if s.GroupBy != nil && !slices.Equal(s.GroupBy, other.GroupBy) {
+		logger.Panicf("BUG: merge snapshots must have the same groupBy; s: %v; other: %v", s.GroupBy, other.GroupBy)
 	}
 	if s.Interval != 0 && s.Interval != other.Interval {
 		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
 	}
 
-	for name, otherSK := range other.Sketches {
-		if existing, ok := s.Sketches[name]; ok {
-			_ = existing.Merge(otherSK)
+	for key, otherSSK := range other.Sketches {
+		if existingSSK, ok := s.Sketches[key]; ok {
+			_ = existingSSK.Sketch.Merge(otherSSK.Sketch)
 		} else {
-			s.Sketches[name] = otherSK.Clone()
+			s.Sketches[key] = SnapshotSketch{
+				Values: append([]string{}, otherSSK.Values...),
+				Sketch: otherSSK.Sketch.Clone(),
+			}
 		}
 	}
 
 	s.Interval = other.Interval
-	s.MetricPrefix = other.MetricPrefix
-	s.GroupLimit = other.GroupLimit
-	s.GroupByKeysLabel = other.GroupByKeysLabel
+	for k, v := range other.Labels {
+		if s.Labels == nil {
+			s.Labels = make(map[string]string)
+		}
+		s.Labels[k] = v
+	}
+
 	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
-	s.RejectSize += other.RejectSize
+	s.GroupLimit = other.GroupLimit
+	s.GroupRejectSize += other.GroupRejectSize
 }
 
-// writeMetrics writes metrics to w.
-// w must be a buffered writer.
 func (s *snapshot) writeMetrics(w io.Writer) error {
-	for name, sketch := range s.Sketches {
-		if _, err := w.Write(bytesutil.ToUnsafeBytes(name)); err != nil {
-			return err
-		}
-		if _, err := w.Write(strconv.AppendUint(nil, sketch.Estimate(), 10)); err != nil {
-			return err
-		}
-		if _, err := w.Write([]byte("\n")); err != nil {
+	if err := s.writeCardinalityEstimates(w); err != nil {
+		return err
+	}
+	if len(s.GroupBy) > 0 {
+		if err := s.writeGroupSizeAndLimit(w, int64(len(s.Sketches))+s.GroupRejectSize); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	if len(s.GroupBy) > 0 {
-		groupSize := int64(len(s.Sketches)) + s.RejectSize
+// writeCardinalityEstimates writes metrics to w.
+// w must be a buffered writer.
+func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
+	tmpBufP := getFormatBuf()
+	tmpBuf := *tmpBufP
+	defer func() {
+		*tmpBufP = tmpBuf
+		putFormatBuf(tmpBufP)
+	}()
 
-		formatBuf := make([]byte, 0, 1024)
-		formatBuf = appendGroupMetric(formatBuf, s.MetricPrefix, s.GroupByKeysLabel)
-		formatBuf = strconv.AppendInt(formatBuf, groupSize, 10)
-		formatBuf = append(formatBuf, "\n"...)
-		if _, err := w.Write(formatBuf); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
+
+	if len(s.GroupBy) == 0 {
+		tmpBuf = tmpBuf[:0]
+		tmpBuf = appendCardinalityEstimateGlobalMetric(tmpBuf, metricPrefix)
+		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[0].Sketch.Estimate(), 10)
+		tmpBuf = append(tmpBuf, "\n"...)
+		if _, err := w.Write(tmpBuf); err != nil {
+			return err
 		}
+		return nil
+	}
 
-		formatBuf = formatBuf[:0]
-		formatBuf = appendGroupLimitMetric(formatBuf, s.GroupByKeysLabel, s.Interval)
-		formatBuf = strconv.AppendInt(formatBuf, s.GroupLimit, 10)
-		formatBuf = append(formatBuf, "\n"...)
-		if _, err := w.Write(formatBuf); err != nil {
-			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)
+	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
+
+	for _, ssk := range s.Sketches {
+		tmpBuf = tmpBuf[:0]
+		tmpBuf = appendCardinalityEstimateGroupMetrics(tmpBuf, metricPrefix, groupByKeysLabel, s.GroupBy, ssk.Values)
+		tmpBuf = strconv.AppendUint(tmpBuf, ssk.Sketch.Estimate(), 10)
+		tmpBuf = append(tmpBuf, "\n"...)
+		if _, err := w.Write(tmpBuf); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
+// writeGroupSizeAndLimit writes metrics to w.
+// w must be a buffered writer.
+func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
+	tmpBufP := getFormatBuf()
+	tmpBuf := *tmpBufP
+	defer func() {
+		*tmpBufP = tmpBuf
+		putFormatBuf(tmpBufP)
+	}()
+
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
+
+	tmpBuf = tmpBuf[:0]
+	tmpBuf = appendCardinalityEstimateGroupSizeMetric(tmpBuf, metricPrefix, s.GroupBy)
+	tmpBuf = strconv.AppendInt(tmpBuf, groupSize, 10)
+	tmpBuf = append(tmpBuf, "\n"...)
+	if _, err := w.Write(tmpBuf); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	tmpBuf = tmpBuf[:0]
+	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval)
+	tmpBuf = strconv.AppendInt(tmpBuf, s.GroupLimit, 10)
+	tmpBuf = append(tmpBuf, "\n"...)
+	if _, err := w.Write(tmpBuf); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
+}
+
+func (s *snapshot) key() string {
+	groupByKey := `__global__`
+	if len(s.GroupBy) > 0 {
+		groupByKey = strings.Join(s.GroupBy, ",")
+	}
+
+	var labelsKey string
+	if len(s.Labels) > 0 {
+		keys := make([]string, 0, len(s.Labels))
+		for k := range s.Labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		for _, k := range keys {
+			b.WriteString(k)
+			b.WriteByte('=')
+			b.WriteString(s.Labels[k])
+			b.WriteByte('\x00')
+		}
+		labelsKey = b.String()
+	}
+
+	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v", labelsKey, groupByKey, s.Interval)
+}
+
 func (s *snapshot) reset() {
 	s.GroupLimit = 0
-	s.GroupByKeysLabel = ""
-	s.RejectSize = 0
-	s.MetricPrefix = ""
+	s.GroupRejectSize = 0
 	s.Interval = 0
 	s.GroupBy = s.GroupBy[:0]
+	clear(s.Labels)
 	clear(s.Sketches)
 }
 
-func convertNoGroupToSnapshot(e *estimator, s *snapshot) *snapshot {
-	if len(e.groupBy) != 0 {
-		panic("BUG: do not use this function for estimator with non-empty groupBy")
-	}
-	if s == nil {
-		s = newSnapshot()
-	}
-	s.reset()
-
-	eb0 := e.buckets[0]
-
-	resSK := eb0.newSketch()
-	for _, eb := range e.buckets {
-		eb.writeNoGroupMetric(resSK)
-	}
-
-	formatBuf := make([]byte, 0, 1024)
-	formatBuf = appendGlobalMetric(formatBuf, eb0.metricPrefix)
-	s.Sketches[string(formatBuf)] = resSK
-	s.GroupByKeysLabel = eb0.groupByKeysLabel
-	s.MetricPrefix = eb0.metricPrefix
-	s.GroupBy = append(s.GroupBy[:0], eb0.groupBy...)
-
-	return s
+// appendCardinalityEstimateGlobalMetric produces:
+// 'cardinality_estimate{interval="5m",group_by_keys="__global__"} '
+func appendCardinalityEstimateGlobalMetric(buf []byte, metricPrefix string) []byte {
+	buf = append(buf, metricPrefix...)
+	buf = append(buf, `,group_by_keys="__global__"} `...)
+	return buf
 }
 
-func convertGroupToSnapshot(e *estimator, s *snapshot) *snapshot {
-	if len(e.groupBy) == 0 {
-		panic("BUG: do not use this function for estimator with empty groupBy")
-	}
-
-	eb0 := e.buckets[0]
-
-	formatBuf := make([]byte, 0, 16384)
-	formatBuf = appendGroupByKeysAndValuesPrefix(formatBuf, eb0.metricPrefix, eb0.groupByKeysLabel)
-
-	if s == nil {
-		s = newSnapshot()
-	}
-	s.reset()
-
-	for _, eb := range e.buckets {
-		s = convertGroupBucketToSnapshot(eb, s, formatBuf)
-	}
-	return s
+// appendCardinalityEstimateGroupSizeMetric produces:
+// 'cardinality_estimate{interval="5m",group_by_keys="__group__",group_by_values="fooKey,barKey"} '
+func appendCardinalityEstimateGroupSizeMetric(buf []byte, metricPrefix string, keys []string) []byte {
+	buf = append(buf, metricPrefix...)
+	buf = append(buf, `,group_by_keys="__group__",`...)
+	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
+	buf = append(buf, `} `...)
+	return buf
 }
 
-func convertGroupBucketToSnapshot(eb *estimatorBucket, s *snapshot, formatBuf []byte) *snapshot {
-	if len(eb.groupBy) == 0 {
-		panic("BUG: do not use this function for estimator with empty groupBy")
-	}
+// appendGroupLimitMetric produces:
+// 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
+func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) []byte {
+	buf = buf[:0]
+	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
+	buf = append(buf, interval.String()...)
+	buf = append(buf, `",group_by_keys="__group__",`...)
+	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
+	buf = append(buf, `} `...)
+	return buf
+}
 
-	prefixLen := len(formatBuf)
-	resSK := eb.newSketch()
+// appendCardinalityEstimateGroupMetrics produces:
+// 'cardinality_estimate{interval="5m",group_by_keys="fooKey,barKey",group_by_values='fooVal,BarVal',by_fooKey="fooVal",by_barKey="barVal"} '
+func appendCardinalityEstimateGroupMetrics(buf []byte, metricPrefix, groupByKeysLabel string, keys, values []string) []byte {
+	buf = append(buf, metricPrefix...)
+	buf = append(buf, `,`...)
+	buf = append(buf, groupByKeysLabel...)
+	buf = append(buf, `,`...)
 
-	eb.mu.Lock()
-	defer eb.mu.Unlock()
-	for valuesKey, gsk := range eb.groups {
-		resSK.Reset()
-		formatBuf = append(formatBuf[:prefixLen], gsk.groupValueLabels...)
-		eb.mergeSketches(gsk.Sketch, eb.prevGroups[valuesKey].Sketch, resSK)
-		s.Sketches[string(formatBuf)] = resSK.Clone()
-	}
-	for valuesKey := range eb.prevGroups {
-		if _, ok := eb.groups[valuesKey]; ok {
-			continue
+	tmpBufP := getFormatBuf()
+	tmpBuf := *tmpBufP
+	defer func() {
+		*tmpBufP = tmpBuf
+		putFormatBuf(tmpBufP)
+	}()
+	for i := 0; i < len(values); i++ {
+		if i > 0 {
+			tmpBuf = append(tmpBuf, ',')
 		}
 
-		resSK.Reset()
-		formatBuf = formatBuf[:prefixLen]
+		tmpBuf = append(tmpBuf, []byte(values[i])...)
+	}
+	buf = append(buf, `group_by_values=`...)
+	buf = strconv.AppendQuote(buf, bytesutil.ToUnsafeString(tmpBuf))
 
-		gsk := eb.prevGroups[valuesKey]
-		formatBuf = append(formatBuf, gsk.groupValueLabels...)
-
-		eb.mergeSketches(nil, eb.prevGroups[valuesKey].Sketch, resSK)
-		s.Sketches[string(formatBuf)] = resSK.Clone()
+	for i := 0; i < len(values); i++ {
+		buf = append(buf, ',')
+		switch keys[i] {
+		case `__name__`:
+			buf = append(buf, `by__name__`...)
+		case `__label__`:
+			buf = append(buf, `by__label__`...)
+		default:
+			buf = append(buf, `by_`...)
+			buf = append(buf, keys[i]...)
+		}
+		buf = append(buf, '=')
+		buf = strconv.AppendQuote(buf, values[i])
 	}
 
-	s.GroupLimit = eb.groupSize.limit
-	s.GroupByKeysLabel = eb.groupByKeysLabel
-	s.MetricPrefix = eb.metricPrefix
-	s.GroupBy = append(s.GroupBy[:0], eb.groupBy...)
-	s.Interval = eb.interval
+	buf = append(buf, `} `...)
 
-	eb.groupSize.rejectMu.Lock()
-	if sk := eb.groupSize.rejectSketches[eb.idx]; sk != nil {
-		s.RejectSize += int64(sk.Estimate())
+	return buf
+}
+
+// appendCardinalityEstimateGroupMetrics produces:
+// 'group_by_keys="fooKey,barKey"'
+func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte {
+	tmpBufP := getFormatBuf()
+	tmpBuf := *tmpBufP
+	defer func() {
+		*tmpBufP = tmpBuf
+		putFormatBuf(tmpBufP)
+	}()
+
+	for i := range keys {
+		if i > 0 {
+			tmpBuf = append(tmpBuf, ',')
+		}
+
+		tmpBuf = append(tmpBuf, keys[i]...)
 	}
-	eb.groupSize.rejectMu.Unlock()
+	buf = append(buf, labelName...)
+	buf = append(buf, '=')
+	buf = strconv.AppendQuote(buf, bytesutil.ToUnsafeString(tmpBuf))
+	return buf
+}
 
-	return s
+func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration) []byte {
+	buf = append(buf, `cardinality_estimate{interval=`...)
+	buf = strconv.AppendQuote(buf, interval.String())
+
+	if len(labels) > 0 {
+		keys := make([]string, 0, len(labels))
+		for k := range labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			buf = append(buf, ',')
+			buf = append(buf, k...)
+			buf = append(buf, '=')
+			buf = strconv.AppendQuote(buf, labels[k])
+		}
+	}
+
+	return buf
+}
+
+type sketchesPool struct {
+	precision uint8
+	sparseSKs []*hyperloglog.Sketch
+	denseSKs  []*hyperloglog.Sketch
+}
+
+func newSketchesPool(precision uint8, size int) *sketchesPool {
+	p := &sketchesPool{
+		precision: precision,
+		sparseSKs: make([]*hyperloglog.Sketch, 0, size),
+	}
+	for i := 0; i < size; i++ {
+		p.sparseSKs = append(p.sparseSKs, mustNewSketch(precision, true))
+	}
+	return p
+}
+
+func (p *sketchesPool) getSparse() *hyperloglog.Sketch {
+	n := len(p.sparseSKs)
+	if n == 0 {
+		return mustNewSketch(p.precision, true)
+	}
+	sk := p.sparseSKs[n-1]
+	p.sparseSKs = p.sparseSKs[:n-1]
+	return sk
+}
+
+func (p *sketchesPool) getDense() *hyperloglog.Sketch {
+	n := len(p.denseSKs)
+	if n == 0 {
+		return mustNewSketch(p.precision, false)
+	}
+	sk := p.denseSKs[n-1]
+	p.denseSKs = p.denseSKs[:n-1]
+	return sk
+}
+
+func (p *sketchesPool) getForMerge(other *hyperloglog.Sketch) *hyperloglog.Sketch {
+	if other.Sparse() {
+		return p.getSparse()
+	}
+
+	return p.getDense()
+}
+
+func (p *sketchesPool) put(sk *hyperloglog.Sketch) {
+	sk.Reset()
+	if sk.Sparse() {
+		p.sparseSKs = append(p.sparseSKs, sk)
+		return
+	}
+
+	p.denseSKs = append(p.denseSKs, sk)
 }
