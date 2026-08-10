@@ -16,6 +16,10 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.12](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.12)
+
+* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): fix panic when stream config contains __label__ pseudo-label.
+
 ## [v0.1.11](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.11)
 
 **Update Note 1:** This version introduces a breaking change in the cluster protocol. Please update everything to the latest version in one go and ignore errors during deployment.
