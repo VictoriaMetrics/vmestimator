@@ -152,7 +152,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	if len(s.GroupBy) == 0 {
@@ -192,7 +192,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	tmpBuf = tmpBuf[:0]
@@ -204,7 +204,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	}
 
 	tmpBuf = tmpBuf[:0]
-	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval)
+	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval, s.Filter)
 	tmpBuf = strconv.AppendInt(tmpBuf, s.GroupLimit, 10)
 	tmpBuf = append(tmpBuf, "\n"...)
 	if _, err := w.Write(tmpBuf); err != nil {
@@ -270,11 +270,13 @@ func appendCardinalityEstimateGroupSizeMetric(buf []byte, metricPrefix string, k
 
 // appendGroupLimitMetric produces:
 // 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
-func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) []byte {
+func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration, filter string) []byte {
 	buf = buf[:0]
-	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
-	buf = append(buf, interval.String()...)
-	buf = append(buf, `",group_by_keys="__group__",`...)
+	buf = append(buf, `vmestimator_estimator_group_limit{interval=`...)
+	buf = strconv.AppendQuote(buf, interval.String())
+	buf = append(buf, `,filter=`...)
+	buf = strconv.AppendQuote(buf, filter)
+	buf = append(buf, `,group_by_keys="__group__",`...)
 	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
 	buf = append(buf, `} `...)
 	return buf
@@ -347,9 +349,11 @@ func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte 
 	return buf
 }
 
-func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration) []byte {
+func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter string) []byte {
 	buf = append(buf, `cardinality_estimate{interval=`...)
 	buf = strconv.AppendQuote(buf, interval.String())
+	buf = append(buf, ",filter="...)
+	buf = strconv.AppendQuote(buf, filter)
 
 	if len(labels) > 0 {
 		keys := make([]string, 0, len(labels))

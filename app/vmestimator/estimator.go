@@ -22,8 +22,8 @@ import (
 const labelKeyword = "__label__"
 
 type estimator struct {
-	groupBy   []string
-	groupSize *groupSize
+	groupBy        []string
+	groupSize      *groupSize
 	compiledFilter compiledFilter
 
 	hasLabelKeyword bool
@@ -81,7 +81,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	e := &estimator{
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
-		compiledFilter:   cf,
+		compiledFilter:  cf,
 		groupSize: &groupSize{
 			limit:          int64(cfg.GroupLimit),
 			bucketSizes:    make([]int64, cfg.Buckets),
@@ -107,7 +107,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 			groupBy:   cfg.GroupBy,
 			interval:  cfg.Interval,
 			labels:    cfg.Labels,
-			filter:           cfg.Filter,
+			filter:    cfg.Filter,
 
 			precision:       cfg.HLLPrecision,
 			sparse:          *cfg.HLLSparse,
@@ -284,6 +284,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		}
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
 		s.Interval = eb0.interval
+		s.Filter = eb0.filter
 		s.Labels = eb0.labels
 		s.GroupBy = nil
 		return cb(s)
@@ -295,6 +296,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval
+	s.Filter = eb0.filter
 	s.Labels = eb0.labels
 
 	skp := newSketchesPool(eb0.precision, min(batchSize, eb0.groupSize.avgBucketSize()))
@@ -416,7 +418,7 @@ type estimatorBucket struct {
 	idx             int
 	groupBy         []string
 	interval        time.Duration
-	filter           string
+	filter          string
 	precision       uint8
 	sparse          bool
 	labels          map[string]string
