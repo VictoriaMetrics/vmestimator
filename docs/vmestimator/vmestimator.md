@@ -193,7 +193,7 @@ streams:
 ## Cardinality Metrics
 
 Cardinality estimates are exposed as the `cardinality_estimate` metric.
-All metrics include `interval`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
+All metrics include `interval`, `filter`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
 
 For global estimates (no `group_by` configured), `group_by_keys` is `__global__` and `group_by_values` is omitted:
 ```

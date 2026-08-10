@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -67,8 +68,22 @@ func loadConfig(path string) ([]*estimator, error) {
 		stream.GroupBy = newGroupBy
 	}
 
+	reservedLabels := map[string]bool{
+		"interval":        true,
+		"filter":          true,
+		"group_by_keys":   true,
+		"group_by_values": true,
+	}
 	es := make([]*estimator, 0, len(cfg.Streams))
 	for _, ec := range cfg.Streams {
+		for k := range ec.Labels {
+			if reservedLabels[k] {
+				return nil, fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
+			}
+			if strings.HasPrefix(k, "by_") {
+				return nil, fmt.Errorf("static label name %q is reserved: labels starting with \"by_\" are reserved and cannot be used in labels", k)
+			}
+		}
 		e, err := newEstimator(ec)
 		if err != nil {
 			logger.Fatalf("cannot create estimator: %v", err)
