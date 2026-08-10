@@ -195,7 +195,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	tmpBuf = strconv.AppendInt(tmpBuf, groupSize, 10)
 	tmpBuf = append(tmpBuf, "\n"...)
 	if _, err := w.Write(tmpBuf); err != nil {
-		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		return fmt.Errorf("write: %w", err)
 	}
 
 	tmpBuf = tmpBuf[:0]
@@ -203,7 +203,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	tmpBuf = strconv.AppendInt(tmpBuf, s.GroupLimit, 10)
 	tmpBuf = append(tmpBuf, "\n"...)
 	if _, err := w.Write(tmpBuf); err != nil {
-		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+		return fmt.Errorf("write: %w", err)
 	}
 
 	return nil
