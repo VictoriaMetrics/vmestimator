@@ -56,6 +56,7 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 type snapshot struct {
 	Interval time.Duration
 	Labels   map[string]string
+	Filter   string
 
 	GroupBy         []string
 	GroupLimit      int64
@@ -100,6 +101,9 @@ func (s *snapshot) merge(other *snapshot) {
 	if s.Interval != 0 && s.Interval != other.Interval {
 		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
 	}
+	if s.Filter != "" && s.Filter != other.Filter {
+		logger.Panicf("BUG: merge snapshots must have the same filter; s: %s; other: %s", s.Filter, other.Filter)
+	}
 
 	for key, otherSSK := range other.Sketches {
 		if existingSSK, ok := s.Sketches[key]; ok {
@@ -113,6 +117,7 @@ func (s *snapshot) merge(other *snapshot) {
 	}
 
 	s.Interval = other.Interval
+	s.Filter = other.Filter
 	for k, v := range other.Labels {
 		if s.Labels == nil {
 			s.Labels = make(map[string]string)
@@ -147,7 +152,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	if len(s.GroupBy) == 0 {
@@ -187,7 +192,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	tmpBuf = tmpBuf[:0]
@@ -199,7 +204,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	}
 
 	tmpBuf = tmpBuf[:0]
-	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval)
+	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval, s.Filter)
 	tmpBuf = strconv.AppendInt(tmpBuf, s.GroupLimit, 10)
 	tmpBuf = append(tmpBuf, "\n"...)
 	if _, err := w.Write(tmpBuf); err != nil {
@@ -232,13 +237,14 @@ func (s *snapshot) key() string {
 		labelsKey = b.String()
 	}
 
-	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v", labelsKey, groupByKey, s.Interval)
+	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, s.Interval, s.Filter)
 }
 
 func (s *snapshot) reset() {
 	s.GroupLimit = 0
 	s.GroupRejectSize = 0
 	s.Interval = 0
+	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
 	clear(s.Labels)
 	clear(s.Sketches)
@@ -264,11 +270,13 @@ func appendCardinalityEstimateGroupSizeMetric(buf []byte, metricPrefix string, k
 
 // appendGroupLimitMetric produces:
 // 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
-func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration) []byte {
+func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration, filter string) []byte {
 	buf = buf[:0]
-	buf = append(buf, `vmestimator_estimator_group_limit{interval="`...)
-	buf = append(buf, interval.String()...)
-	buf = append(buf, `",group_by_keys="__group__",`...)
+	buf = append(buf, `vmestimator_estimator_group_limit{interval=`...)
+	buf = strconv.AppendQuote(buf, interval.String())
+	buf = append(buf, `,filter=`...)
+	buf = strconv.AppendQuote(buf, filter)
+	buf = append(buf, `,group_by_keys="__group__",`...)
 	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
 	buf = append(buf, `} `...)
 	return buf
@@ -341,9 +349,11 @@ func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte 
 	return buf
 }
 
-func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration) []byte {
+func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter string) []byte {
 	buf = append(buf, `cardinality_estimate{interval=`...)
 	buf = strconv.AppendQuote(buf, interval.String())
+	buf = append(buf, ",filter="...)
+	buf = strconv.AppendQuote(buf, filter)
 
 	if len(labels) > 0 {
 		keys := make([]string, 0, len(labels))

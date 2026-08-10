@@ -400,10 +400,11 @@ func TestGroupSnapshot(t *testing.T) {
 }
 
 func TestSnapshotsAdd(t *testing.T) {
-	makeSnapshot := func(groupBy []string, interval time.Duration) *snapshot {
+	makeSnapshot := func(groupBy []string, filter string, interval time.Duration) *snapshot {
 		s := newSnapshot()
 		s.Interval = interval
 		s.GroupBy = groupBy
+		s.Filter = filter
 		return s
 	}
 
@@ -418,44 +419,89 @@ func TestSnapshotsAdd(t *testing.T) {
 		}
 	}
 
-	// same group_by keys, same interval => merged into one
+	// same group_by keys, same filter, same interval => merged into one
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`a`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
 	}, 1)
 
 	// same group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`a`}, 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
 	}, 2)
 
 	// different group_by keys, same interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`b`}, 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 5*time.Minute),
 	}, 2)
 
 	// different group_by keys, different interval => two separate entries
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`b`}, 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 10*time.Minute),
 	}, 2)
 
 	// three snapshots: two share group_by+interval, third differs only by interval
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`a`}, 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
 	}, 2)
 
-	// all distinct
+	// all distinct (keys x interval)
 	f([]*snapshot{
-		makeSnapshot([]string{`a`}, 5*time.Minute),
-		makeSnapshot([]string{`b`}, 5*time.Minute),
-		makeSnapshot([]string{`a`}, 10*time.Minute),
-		makeSnapshot([]string{`b`}, 10*time.Minute),
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`b`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, "", 10*time.Minute),
+		makeSnapshot([]string{`b`}, "", 10*time.Minute),
 	}, 4)
+
+	// same group_by keys, same filter, same interval => merged into one
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+	}, 1)
+
+	// same group_by keys, different filter, same interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
+	}, 2)
+
+	// same group_by keys, one with filter one without, same interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, "", 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+	}, 2)
+
+	// same filter, different group_by keys, same interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`b`}, `job="x"`, 5*time.Minute),
+	}, 2)
+
+	// same group_by keys, same filter, different interval => two separate entries
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 10*time.Minute),
+	}, 2)
+
+	// all three dimensions vary
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`b`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 10*time.Minute),
+	}, 4)
+
+	// three snapshots: two share all three keys, third differs only by filter
+	f([]*snapshot{
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="x"`, 5*time.Minute),
+		makeSnapshot([]string{`a`}, `job="y"`, 5*time.Minute),
+	}, 2)
 }
 
 func TestGroupSnapshotGroupLimit(t *testing.T) {

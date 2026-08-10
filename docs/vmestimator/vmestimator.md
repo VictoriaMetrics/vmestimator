@@ -121,6 +121,17 @@ streams:
     # default: 5m
     interval: <duration>
 
+    # Optional. MetricsQL label selector used to pre-filter time series before counting.
+    # Only series matching all matchers are counted. Supports equality (=), negative equality (!=),
+    # regexp (=~), and negative regexp (!~) matchers.
+    # Examples:
+    #  - '{job="api"}'                       — only series with job="api"
+    #  - '{env!="dev"}'                       — exclude dev environment
+    #  - '{job=~"api|worker",env!~"dev|staging"}' — regexp and negative regexp combined
+    #
+    # default: none (all series are counted)
+    filter: '<MetricsQL selector>'
+
     # Optional. Label names used to split the cardinality estimate into per-combination groups.
     # Each distinct combination of values for these labels gets its own estimate metric.
     # Omit entirely for a single global estimate across all series.
@@ -182,27 +193,27 @@ streams:
 ## Cardinality Metrics
 
 Cardinality estimates are exposed as the `cardinality_estimate` metric.
-All metrics include `interval`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
+All metrics include `interval`, `filter`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
 
 For global estimates (no `group_by` configured), `group_by_keys` is `__global__` and `group_by_values` is omitted:
 ```
-cardinality_estimate{interval="1h0m0s",group_by_keys="__global__"} 142300
+cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__global__"} 142300
 ```
 
 For grouped estimates, one summary line shows the total number of distinct groups `group_by_keys="__group__"`, followed by one line per distinct label value combination.
 Each per-group line also includes individual `by_{key}="{val}"` labels:
 ```
-cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="instance,job"} 2
-cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
-cardinality_estimate{interval="5m0s",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="instance,job"} 2
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host2:9100,node",by_instance="host2:9100",by_job="node"} 87
 ```
 
 For `__label__` streams, the group value is the label name and `by__label__` holds it:
 ```
-cardinality_estimate{interval="5m0s",group_by_keys="__group__",group_by_values="__label__"} 3
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="job",by__label__="job"} 12
-cardinality_estimate{interval="5m0s",group_by_keys="__label__",group_by_values="instance",by__label__="instance"} 87
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="__label__"} 3
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="job",by__label__="job"} 12
+cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="instance",by__label__="instance"} 87
 ```
 
 > Note: the total distinct group count in the summary line may exceed the number of per-group lines when `group_limit` is reached
@@ -251,6 +262,23 @@ Per tenant cardinality:
 
 - interval: '5m'
   group_by: ['vm_account_id', 'vm_project_id']
+```
+
+Cardinality scoped to a single job:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  filter: '{job="api"}'
+  group_by: ['__name__']
+```
+
+Cardinality excluding non-production environments:
+```yaml
+# streams.yaml
+
+- interval: '5m'
+  filter: '{env!~"dev|staging"}'
 ```
 
 Per label unique values:
@@ -415,13 +443,13 @@ max(cardinality_estimate) without (instance)
 
 Each stream with a non-empty `group_by` exposes the following operational metrics at `/metrics`:
 
-* `vmestimator_estimator_group_size{interval, group_by_keys}` — the current number of unique `group_by_keys` held by the group.
-* `vmestimator_estimator_group_rejected_size{interval, group_by_keys}` — the number of unique `group_by_keys` rejected after the group reached its `group_limit`.
-* `vmestimator_estimator_group_limit{interval, group_by_keys}` — the maximum number of unique `group_by_keys` the group can hold, as configured by `group_limit`.
+* `vmestimator_estimator_group_size{interval, filter, group_by_keys}` — the current number of unique `group_by_keys` held by the group.
+* `vmestimator_estimator_group_rejected_size{interval, filter, group_by_keys}` — the number of unique `group_by_keys` rejected after the group reached its `group_limit`.
+* `vmestimator_estimator_group_limit{interval, filter, group_by_keys}` — the maximum number of unique `group_by_keys` the group can hold, as configured by `group_limit`.
 
 Additionally, every stream (including non-grouped ones) exposes:
 
-- `vmestimator_estimator_insert_total{group_by_keys, interval}` — total number of samples inserted into this stream's estimator
+- `vmestimator_estimator_insert_total{group_by_keys, interval, filter}` — total number of samples inserted into this stream's estimator (only counts series that passed the `filter`)
 
 
 ## Dashboards

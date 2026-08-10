@@ -22,8 +22,9 @@ import (
 const labelKeyword = "__label__"
 
 type estimator struct {
-	groupBy   []string
-	groupSize *groupSize
+	groupBy        []string
+	groupSize      *groupSize
+	compiledFilter compiledFilter
 
 	hasLabelKeyword bool
 
@@ -65,6 +66,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		}
 	}
 
+	cf, err := compileFilters(cfg.Filter)
+	if err != nil {
+		return nil, fmt.Errorf("cannot compile filters for estimator: %w", err)
+	}
 	if len(cfg.GroupBy) > 0 {
 		for i, k := range cfg.GroupBy[:len(cfg.GroupBy)-1] {
 			if k == labelKeyword {
@@ -76,6 +81,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	e := &estimator{
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
+		compiledFilter:  cf,
 		groupSize: &groupSize{
 			limit:          int64(cfg.GroupLimit),
 			bucketSizes:    make([]int64, cfg.Buckets),
@@ -101,6 +107,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 			groupBy:   cfg.GroupBy,
 			interval:  cfg.Interval,
 			labels:    cfg.Labels,
+			filter:    cfg.Filter,
 
 			precision:       cfg.HLLPrecision,
 			sparse:          *cfg.HLLSparse,
@@ -161,16 +168,21 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	bucketsNum := uint64(len(e.buckets))
 
 	if len(e.groupBy) == 0 {
+		var cnt int
 		tssLen := uint32(len(tss))
 		start := fastrand.Uint32n(tssLen)
 		for j := uint32(0); j < tssLen; j++ {
 			i := (start + j) % tssLen
 
 			ts := tss[i]
+			if !e.compiledFilter.match(ts.Labels) {
+				continue
+			}
 			bi := int(ts.Fingerprint % bucketsNum)
 			e.buckets[bi].insert(ts.Fingerprint, 0, nil)
+			cnt++
 		}
-		e.insertTotal.Add(len(tss))
+		e.insertTotal.Add(cnt)
 		return
 	}
 
@@ -191,6 +203,10 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		i := (start + j) % tssLen
 
 		ts := tss[i]
+		if !e.compiledFilter.match(ts.Labels) {
+			continue
+		}
+
 		d.Reset()
 		clear(groupValues)
 
@@ -268,6 +284,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		}
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
 		s.Interval = eb0.interval
+		s.Filter = eb0.filter
 		s.Labels = eb0.labels
 		s.GroupBy = nil
 		return cb(s)
@@ -279,6 +296,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval
+	s.Filter = eb0.filter
 	s.Labels = eb0.labels
 
 	skp := newSketchesPool(eb0.precision, min(batchSize, eb0.groupSize.avgBucketSize()))
@@ -359,6 +377,7 @@ func (e *estimator) writeMetrics(w io.Writer) {
 		s := &snapshot{
 			GroupBy:    eb0.groupBy,
 			Interval:   eb0.interval,
+			Filter:     eb0.filter,
 			Labels:     eb0.labels,
 			GroupLimit: eb0.groupSize.limit,
 		}
@@ -400,6 +419,7 @@ type estimatorBucket struct {
 	idx             int
 	groupBy         []string
 	interval        time.Duration
+	filter          string
 	precision       uint8
 	sparse          bool
 	labels          map[string]string
