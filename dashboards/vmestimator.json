@@ -179,78 +179,6 @@
         "type": "prometheus",
         "uid": "$ds"
       },
-      "description": "Total size of available memory for selected vmagents.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 12,
-        "y": 1
-      },
-      "id": 22,
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$ds"
-          },
-          "editorMode": "code",
-          "exemplar": true,
-          "expr": "sum(vm_available_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
-          "format": "time_series",
-          "instant": true,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Available memory",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$ds"
-      },
       "description": "Total number of available CPUs for selected vmagents. ",
       "fieldConfig": {
         "defaults": {
@@ -274,7 +202,7 @@
       "gridPos": {
         "h": 3,
         "w": 6,
-        "x": 18,
+        "x": 12,
         "y": 1
       },
       "id": 21,
@@ -316,6 +244,78 @@
         }
       ],
       "title": "Available CPU",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "description": "Total size of available memory for selected vmagents.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 22,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(vm_available_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Available memory",
       "type": "stat"
     },
     {
@@ -1182,7 +1182,7 @@
         "x": 12,
         "y": 28
       },
-      "id": 4,
+      "id": 15,
       "options": {
         "legend": {
           "calcs": [
@@ -1209,14 +1209,14 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate(vm_protoparser_rows_read_total{job=~\"$job\",instance=~\"$instance\",type=\"promremotewrite\"}[$__rate_interval])) by(job, type) > 0",
+          "expr": "sum(max without(interval) (rate(vmestimator_estimator_insert_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval]))) by(job, group_by_keys) > 0",
           "interval": "",
-          "legendFormat": "{{ type }} ({{job}})",
+          "legendFormat": "{{ group_by_keys }} ({{job}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Rows rate ",
+      "title": "Estimation samples rate ",
       "type": "timeseries"
     },
     {
@@ -1289,7 +1289,7 @@
         "x": 0,
         "y": 36
       },
-      "id": 15,
+      "id": 4,
       "options": {
         "legend": {
           "calcs": [
@@ -1316,14 +1316,14 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(max without(interval) (rate(vmestimator_estimator_insert_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval]))) by(job, group_by_keys) > 0",
+          "expr": "sum(rate(vm_protoparser_rows_read_total{job=~\"$job\",instance=~\"$instance\",type=\"promremotewrite\"}[$__rate_interval])) by(job, type) > 0",
           "interval": "",
-          "legendFormat": "{{ group_by_keys }} ({{job}})",
+          "legendFormat": "{{ type }} ({{job}})",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Estimation samples rate ",
+      "title": "Rows rate ",
       "type": "timeseries"
     },
     {
@@ -2274,7 +2274,7 @@
               "mode": "none"
             },
             "thresholdsStyle": {
-              "mode": "area"
+              "mode": "line"
             }
           },
           "decimals": 1,
@@ -2304,7 +2304,7 @@
         "x": 12,
         "y": 78
       },
-      "id": 29,
+      "id": 30,
       "options": {
         "legend": {
           "calcs": [
@@ -2340,6 +2340,224 @@
         }
       ],
       "title": "Go scheduling latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "description": "Shows the rate of allocations in memory. Sudden increase in allocations would mean increased pressure on Go Garbage Collector and can saturate CPU resources of the application.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "decimals": 0,
+          "links": [],
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 86
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "expr": "max(rate(go_memstats_alloc_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by (job,instance)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 2,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Memory allocations rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "links": [],
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 86
+      },
+      "id": 29,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(max_over_time(go_goroutines{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])) by(job)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 2,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Goroutines ($instance)",
       "type": "timeseries"
     },
     {
@@ -2417,7 +2635,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 94
       },
       "id": 27,
       "options": {
@@ -2459,112 +2677,6 @@
       ],
       "title": "Logging rate",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$ds"
-      },
-      "description": "Shows the rate of allocations in memory. Sudden increase in allocations would mean increased pressure on Go Garbage Collector and can saturate CPU resources of the application.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          },
-          "decimals": 0,
-          "links": [],
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 86
-      },
-      "id": 19,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$ds"
-          },
-          "editorMode": "code",
-          "expr": "max(rate(go_memstats_alloc_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by (job,instance)",
-          "format": "time_series",
-          "interval": "",
-          "intervalFactor": 2,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Memory allocations rate",
-      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -2576,8 +2688,8 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": "prometheus",
-          "value": "P1809F7CD0C75ACF3"
+          "text": "sandbox-monitoring",
+          "value": "PB894574A363DF0AF"
         },
         "name": "ds",
         "options": [],
@@ -2589,9 +2701,11 @@
       {
         "allowCustomValue": false,
         "current": {
-          "text": "All",
+          "text": [
+            "vmestimator-benchmark-vm-cluster"
+          ],
           "value": [
-            "$__all"
+            "vmestimator-benchmark-vm-cluster"
           ]
         },
         "datasource": {
@@ -2651,7 +2765,7 @@
   "timepicker": {},
   "timezone": "utc",
   "title": "VictoriaMetrics - vmestimator",
-  "uid": "mkv22l4",
-  "version": 5,
+  "uid": "mkv22l4_mak_tmp",
+  "version": 4,
   "weekStart": ""
 }
