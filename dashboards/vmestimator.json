@@ -12,6 +12,38 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "yellow",
+        "name": "restarts",
+        "target": {
+          "expr": "sum(changes(vm_app_start_timestamp{job=~\"$job\", instance=~\"$instance\"}[$__interval])) by(job, instance)",
+          "interval": "",
+          "refId": "Anno"
+        },
+        "textFormat": "{{job}}:{{instance}} restarted"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "#1f60c4",
+        "name": "version",
+        "target": {
+          "expr": "sum by(version) (label_replace(vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version!=\"\"}, \"version\", \"$1\", \"short_version\", \"(.*)\") or vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version=\"\"}) unless (\n\nsum by(version) (label_replace(vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version!=\"\"}, \"version\", \"$1\", \"short_version\", \"(.*)\") or vm_app_version{job=~\"$job\", instance=~\"$instance\", short_version=\"\"}) offset $__interval\n\n)\n",
+          "interval": "",
+          "refId": "Anno"
+        },
+        "textFormat": "{{version}}"
       }
     ]
   },
@@ -2766,6 +2798,6 @@
   "timezone": "utc",
   "title": "VictoriaMetrics - vmestimator",
   "uid": "mkv22l4_mak_tmp",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }
