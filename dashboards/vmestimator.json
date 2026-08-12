@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
   "links": [],
   "panels": [
     {
@@ -82,7 +81,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -98,78 +97,6 @@
         }
       ],
       "title": "Samples ingested/s",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "$ds"
-      },
-      "description": "Total size of available memory for selected vmagents.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 18,
-        "y": 1
-      },
-      "id": 22,
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "horizontal",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "text": {},
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.2.10",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "$ds"
-          },
-          "editorMode": "code",
-          "exemplar": true,
-          "expr": "sum(vm_available_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
-          "format": "time_series",
-          "instant": true,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Available memory",
       "type": "stat"
     },
     {
@@ -202,8 +129,8 @@
       "gridPos": {
         "h": 3,
         "w": 6,
-        "x": 0,
-        "y": 4
+        "x": 6,
+        "y": 1
       },
       "id": 23,
       "links": [
@@ -231,7 +158,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -245,6 +172,78 @@
         }
       ],
       "title": "Log messages (30m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "description": "Total size of available memory for selected vmagents.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 22,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(vm_available_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Available memory",
       "type": "stat"
     },
     {
@@ -276,7 +275,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 4
+        "y": 1
       },
       "id": 21,
       "maxDataPoints": 100,
@@ -298,7 +297,7 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -398,14 +397,14 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 4
       },
       "id": 25,
       "options": {
         "cellHeight": "sm",
         "showHeader": true
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -493,7 +492,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 7
+        "y": 4
       },
       "id": 26,
       "options": {
@@ -513,7 +512,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -538,7 +537,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 11
       },
       "id": 11,
       "panels": [],
@@ -619,7 +618,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 15
+        "y": 12
       },
       "id": 1,
       "options": {
@@ -641,7 +640,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -731,7 +730,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 15
+        "y": 12
       },
       "id": 5,
       "options": {
@@ -751,7 +750,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -858,7 +857,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 20
       },
       "id": 2,
       "options": {
@@ -880,7 +879,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -967,7 +966,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 20
       },
       "id": 6,
       "options": {
@@ -987,7 +986,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -1074,7 +1073,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 28
       },
       "id": 3,
       "options": {
@@ -1094,7 +1093,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -1180,8 +1179,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 39
+        "x": 12,
+        "y": 28
       },
       "id": 4,
       "options": {
@@ -1288,7 +1287,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 47
+        "y": 36
       },
       "id": 15,
       "options": {
@@ -1333,7 +1332,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 44
       },
       "id": 12,
       "panels": [],
@@ -1408,7 +1407,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 56
+        "y": 45
       },
       "id": 16,
       "options": {
@@ -1515,7 +1514,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 56
+        "y": 45
       },
       "id": 17,
       "options": {
@@ -1620,7 +1619,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 64
+        "y": 53
       },
       "id": 7,
       "options": {
@@ -1718,7 +1717,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 64
+        "y": 53
       },
       "id": 8,
       "options": {
@@ -1817,7 +1816,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 72
+        "y": 61
       },
       "id": 28,
       "options": {
@@ -1885,7 +1884,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 69
       },
       "id": 14,
       "panels": [],
@@ -1966,7 +1965,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 81
+        "y": 70
       },
       "id": 9,
       "options": {
@@ -2080,7 +2079,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 81
+        "y": 70
       },
       "id": 10,
       "options": {
@@ -2193,7 +2192,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 89
+        "y": 78
       },
       "id": 18,
       "options": {
@@ -2238,7 +2237,7 @@
         "type": "prometheus",
         "uid": "$ds"
       },
-      "description": "Shows the rate of allocations in memory. Sudden increase in allocations would mean increased pressure on Go Garbage Collector and can saturate CPU resources of the application.",
+      "description": "Shows the time goroutines have spent in runnable state before actually running.\n\n**Lower is better.**\n\nHigh values or values exceeding the threshold is usually a sign of            insufficient CPU resources or CPU throttling. \n\nVerify that service has enough CPU resources. Otherwise, the service could work unreliably with delays in processing.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -2288,10 +2287,14 @@
               {
                 "color": "green",
                 "value": 0
+              },
+              {
+                "color": "red",
+                "value": 0.1
               }
             ]
           },
-          "unit": "bytes"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -2299,9 +2302,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 89
+        "y": 78
       },
-      "id": 19,
+      "id": 29,
       "options": {
         "legend": {
           "calcs": [
@@ -2327,7 +2330,7 @@
             "uid": "$ds"
           },
           "editorMode": "code",
-          "expr": "max(rate(go_memstats_alloc_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by (job,instance)",
+          "expr": "max(histogram_quantile(0.99, sum(rate(go_sched_latencies_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])) by (job, instance, le))) by(job)",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 2,
@@ -2336,7 +2339,7 @@
           "refId": "A"
         }
       ],
-      "title": "Memory allocations rate",
+      "title": "Go scheduling latency",
       "type": "timeseries"
     },
     {
@@ -2414,7 +2417,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 97
+        "y": 86
       },
       "id": 27,
       "options": {
@@ -2455,6 +2458,112 @@
         }
       ],
       "title": "Logging rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds"
+      },
+      "description": "Shows the rate of allocations in memory. Sudden increase in allocations would mean increased pressure on Go Garbage Collector and can saturate CPU resources of the application.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "decimals": 0,
+          "links": [],
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 86
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$ds"
+          },
+          "editorMode": "code",
+          "expr": "max(rate(go_memstats_alloc_bytes_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) by (job,instance)",
+          "format": "time_series",
+          "interval": "",
+          "intervalFactor": 2,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Memory allocations rate",
       "type": "timeseries"
     }
   ],
@@ -2502,6 +2611,7 @@
         },
         "refresh": 2,
         "regex": "",
+        "regexApplyTo": "value",
         "type": "query"
       },
       {
@@ -2529,6 +2639,7 @@
         },
         "refresh": 2,
         "regex": "",
+        "regexApplyTo": "value",
         "type": "query"
       }
     ]
@@ -2541,5 +2652,6 @@
   "timezone": "utc",
   "title": "VictoriaMetrics - vmestimator",
   "uid": "mkv22l4",
-  "version": 2
+  "version": 5,
+  "weekStart": ""
 }
