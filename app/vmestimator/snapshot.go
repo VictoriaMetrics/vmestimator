@@ -131,10 +131,16 @@ func (s *snapshot) merge(other *snapshot) {
 }
 
 func (s *snapshot) writeMetrics(w io.Writer) error {
-	if err := s.writeCardinalityEstimates(w); err != nil {
+	dropped, err := s.writeCardinalityEstimates(w)
+	if err != nil {
 		return err
 	}
 	if len(s.GroupBy) > 0 {
+		if dropped > 0 {
+			if err := s.writeDroppedMetric(w, dropped); err != nil {
+				return err
+			}
+		}
 		if err := s.writeGroupSizeAndLimit(w, int64(len(s.Sketches))+s.GroupRejectSize); err != nil {
 			return err
 		}
@@ -144,7 +150,8 @@ func (s *snapshot) writeMetrics(w io.Writer) error {
 
 // writeCardinalityEstimates writes metrics to w.
 // w must be a buffered writer.
-func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
+// Returns the number of estimates dropped due to the minCardinality filter.
+func (s *snapshot) writeCardinalityEstimates(w io.Writer) (uint64, error) {
 	tmpBufP := getFormatBuf()
 	tmpBuf := *tmpBufP
 	defer func() {
@@ -156,30 +163,37 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) error {
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	if len(s.GroupBy) == 0 {
+		estimate := s.Sketches[0].Sketch.Estimate()
 		tmpBuf = tmpBuf[:0]
 		tmpBuf = appendCardinalityEstimateGlobalMetric(tmpBuf, metricPrefix)
-		tmpBuf = strconv.AppendUint(tmpBuf, s.Sketches[0].Sketch.Estimate(), 10)
+		tmpBuf = strconv.AppendUint(tmpBuf, estimate, 10)
 		tmpBuf = append(tmpBuf, "\n"...)
 		if _, err := w.Write(tmpBuf); err != nil {
-			return err
+			return 0, err
 		}
-		return nil
+		return 0, nil
 	}
 
 	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)
 	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
 
+	var dropped uint64
 	for _, ssk := range s.Sketches {
+		estimate := ssk.Sketch.Estimate()
+		if estimate < *cardinalityMetricsMinCardinality {
+			dropped++
+			continue
+		}
 		tmpBuf = tmpBuf[:0]
 		tmpBuf = appendCardinalityEstimateGroupMetrics(tmpBuf, metricPrefix, groupByKeysLabel, s.GroupBy, ssk.Values)
-		tmpBuf = strconv.AppendUint(tmpBuf, ssk.Sketch.Estimate(), 10)
+		tmpBuf = strconv.AppendUint(tmpBuf, estimate, 10)
 		tmpBuf = append(tmpBuf, "\n"...)
 		if _, err := w.Write(tmpBuf); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
-	return nil
+	return dropped, nil
 }
 
 // writeGroupSizeAndLimit writes metrics to w.
@@ -211,6 +225,36 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 		return fmt.Errorf("write: %w", err)
 	}
 
+	return nil
+}
+
+// writeDroppedMetric writes the count of group cardinality estimates dropped by the minCardinality filter.
+// It must only be called for group-by snapshots (len(s.GroupBy) > 0).
+func (s *snapshot) writeDroppedMetric(w io.Writer, dropped uint64) error {
+	if len(s.GroupBy) == 0 {
+		logger.Panicf("BUG: writeDroppedMetric called for global snapshot")
+	}
+
+	tmpBufP := getFormatBuf()
+	tmpBuf := *tmpBufP
+	defer func() {
+		*tmpBufP = tmpBuf
+		putFormatBuf(tmpBufP)
+	}()
+
+	tmpBuf = tmpBuf[:0]
+	tmpBuf = append(tmpBuf, `vmestimator_cardinality_estimates_dropped{interval=`...)
+	tmpBuf = strconv.AppendQuote(tmpBuf, s.Interval.String())
+	tmpBuf = append(tmpBuf, `,filter=`...)
+	tmpBuf = strconv.AppendQuote(tmpBuf, s.Filter)
+	tmpBuf = append(tmpBuf, `,`...)
+	tmpBuf = appendGroupByKeysLabel(tmpBuf, `group_by_keys`, s.GroupBy)
+	tmpBuf = append(tmpBuf, `} `...)
+	tmpBuf = strconv.AppendUint(tmpBuf, dropped, 10)
+	tmpBuf = append(tmpBuf, "\n"...)
+	if _, err := w.Write(tmpBuf); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
 	return nil
 }
 

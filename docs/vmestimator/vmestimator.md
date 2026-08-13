@@ -225,6 +225,10 @@ This is controlled by the `-cardinalityMetrics.exposeAt` flag:
 - `-cardinalityMetrics.exposeAt=/cardinality/metrics`: cardinality metrics exposed at separate path
 - `-cardinalityMetrics.exposeAt=`: cardinality metrics not exposed via HTTP
 
+Use `-cardinalityMetrics.minCardinality=N` to suppress group-by cardinality estimates below `N`.
+This is useful when `group_by` produces many low-cardinality groups that add noise without actionable signal.
+When groups are suppressed, the `vmestimator_cardinality_estimates_dropped` metric reports the number of dropped groups per stream.
+
 Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`).
 Set to `0` to disable caching entirely.
@@ -504,6 +508,8 @@ Usage of ./bin/vmestimator:
         Duration for caching cardinality metrics response (default 30s)
   -cardinalityMetrics.exposeAt string
         HTTP path for exposing cardinality metrics. If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. If set to a different path, only cardinality metrics are exposed at that endpoint. If set to an empty value, cardinality metrics are not exposed via HTTP at all. (default "/metrics")
+  -cardinalityMetrics.minCardinality uint
+        Minimum cardinality estimate to expose for group-by streams. Estimates below this threshold are suppressed to reduce metric volume and noise. Set to 0 to expose all estimates (default 0).
   -config string
         Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml for config example
   -enableTCP6

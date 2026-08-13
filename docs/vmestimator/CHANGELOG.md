@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `-cardinalityMetrics.minCardinality` flag to suppress group-by cardinality estimates below the given threshold. When estimates are filtered, the number of suppressed groups is exposed via the `vmestimator_cardinality_estimates_dropped` metric. See [#41](https://github.com/VictoriaMetrics/vmestimator/pull/41).
+
 ## [v0.1.12](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.12)
 
 * BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): fix panic when stream config contains __label__ pseudo-label.
