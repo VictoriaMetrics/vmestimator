@@ -19,7 +19,7 @@ func BenchmarkParse(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(data)))
 	for b.Loop() {
-		err := Parse(bytes.NewReader(data), false, func(tss []TimeSerie) {
+		err := Parse(bytes.NewReader(data), func(tss []TimeSerie) {
 			cnt += len(tss)
 		})
 		if err != nil {
