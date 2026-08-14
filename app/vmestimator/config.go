@@ -27,6 +27,12 @@ type EstimatorConfig struct {
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`
+
+	// DeriveFrom is the index of the base stream to derive estimates from
+	// instead of maintaining its own HLL sketches. nil (default) means the
+	// stream is independent. The derived stream's group_by must be a subset
+	// of the base stream's group_by, and the interval and filter must match.
+	DeriveFrom *int `yaml:"derive_from"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {
@@ -90,6 +96,51 @@ func loadConfig(path string) ([]*estimator, error) {
 			logger.Fatalf("cannot create estimator: %v", err)
 		}
 		es = append(es, e)
+	}
+
+	// Wire up derived estimators.
+	for i, e := range es {
+		if cfg.Streams[i].DeriveFrom == nil {
+			continue
+		}
+
+		baseIdx := *cfg.Streams[i].DeriveFrom
+		if baseIdx >= len(es) {
+			return nil, fmt.Errorf("derive_from index %d out of range for stream %d (have %d streams)", baseIdx, i, len(es))
+		}
+		if baseIdx == i {
+			return nil, fmt.Errorf("stream %d cannot derive from itself", i)
+		}
+
+		base := es[baseIdx]
+		if len(base.groupBy) == 0 {
+			return nil, fmt.Errorf("stream %d derives from stream %d which has no group_by", i, baseIdx)
+		}
+		if cfg.Streams[i].Interval != cfg.Streams[baseIdx].Interval {
+			return nil, fmt.Errorf("derived stream %d must have same interval as base stream %d", i, baseIdx)
+		}
+		if cfg.Streams[i].Filter != cfg.Streams[baseIdx].Filter {
+			return nil, fmt.Errorf("derived stream %d must have same filter as base stream %d", i, baseIdx)
+		}
+		if cfg.Streams[i].HLLPrecision != cfg.Streams[baseIdx].HLLPrecision {
+			return nil, fmt.Errorf("derived stream %d must have same hll_precision as base stream %d", i, baseIdx)
+		}
+
+		di, err := newDerivedInfo(base, e, cfg.Streams[baseIdx])
+		if err != nil {
+			return nil, fmt.Errorf("derived stream %d: %w", i, err)
+		}
+		e.derived = di
+		base.baseFor = append(base.baseFor, e)
+	}
+
+	// Propagate baseFor to buckets so the insert path can notify derived estimators.
+	for _, e := range es {
+		if len(e.baseFor) > 0 {
+			for _, b := range e.buckets {
+				b.baseFor = e.baseFor
+			}
+		}
 	}
 
 	return es, nil

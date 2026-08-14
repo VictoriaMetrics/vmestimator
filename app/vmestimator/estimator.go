@@ -34,6 +34,17 @@ type estimator struct {
 	insertTotal *metrics.Counter
 
 	stopCh chan struct{}
+
+	// derived is non-nil when this estimator derives estimates from a base
+	// estimator instead of maintaining its own HLL sketches. When set,
+	// writeMetrics calls writeDerivedMetrics instead of the normal path.
+	derived *derivedInfo
+
+	// baseFor is the list of estimators that derive from this one. When a
+	// group is rejected due to group_limit, the base estimator calls
+	// insertRejected on each derived estimator so the fingerprints are not
+	// lost.
+	baseFor []*estimator
 }
 
 func newEstimator(cfg EstimatorConfig) (*estimator, error) {
@@ -366,6 +377,11 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 }
 
 func (e *estimator) writeMetrics(w io.Writer) {
+	if e.derived != nil {
+		e.writeDerivedMetrics(w)
+		return
+	}
+
 	var dropped uint64
 	if err := e.toSnapshot(func(s *snapshot) error {
 		d, err := s.writeCardinalityEstimates(w)
@@ -439,6 +455,10 @@ type estimatorBucket struct {
 	groupSize  *groupSize
 	groups     map[uint64]groupSketch
 	prevGroups map[uint64]groupSketch
+
+	// baseFor is the list of derived estimators to notify when a group is
+	// rejected due to group_limit.
+	baseFor []*estimator
 }
 
 func (eb *estimatorBucket) reset() {
@@ -489,6 +509,9 @@ func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues 
 			values = prevGSK.values
 		} else {
 			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
+				for _, de := range eb.baseFor {
+					de.derived.insertRejected(eb.idx, groupValues, fp)
+				}
 				eb.mu.Unlock()
 				return
 			}
