@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.14](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.14)
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `-workers` flag for processing time series insertions concurrently. This improves throughput under high ingestion load. See [#42](https://github.com/VictoriaMetrics/vmestimator/pull/42).
 
 ## [v0.1.13](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.13)
