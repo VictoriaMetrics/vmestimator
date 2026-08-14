@@ -26,6 +26,9 @@ var (
 		"If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. "+
 		"If set to a different path, only cardinality metrics are exposed at that endpoint. "+
 		"If set to an empty value, cardinality metrics are not exposed via HTTP at all.")
+	cardinalityMetricsMinCardinality = flag.Uint64("cardinalityMetrics.minCardinality", 0, "Minimum cardinality estimate to expose. "+
+		"Estimates below this threshold are suppressed to reduce metric volume and noise. "+
+		"Set to 0 to expose all estimates (default 0).")
 )
 
 func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []string) {

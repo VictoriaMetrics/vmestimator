@@ -5,6 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -613,4 +616,69 @@ func TestGroupSnapshotGroupLimit(t *testing.T) {
 		}
 		e.insertMany(tss)
 	})
+}
+
+func TestMinCardinalityFilter(t *testing.T) {
+	orig := *cardinalityMetricsMinCardinality
+	defer func() {
+		*cardinalityMetricsMinCardinality = orig
+	}()
+
+	e, err := newEstimator(EstimatorConfig{
+		Interval: time.Minute * 10,
+		GroupBy:  []string{"foo"},
+		Buckets:  3,
+	})
+	if err != nil {
+		t.Fatalf("newEstimator: %v", err)
+	}
+	defer e.stop()
+
+	*cardinalityMetricsMinCardinality = 100
+
+	// Insert ~10 unique series into "low" group and ~10000 into "high" group.
+	var tss []protoparser.TimeSerie
+	for i := 0; i < 99; i++ {
+		tss = append(tss, protoparser.TimeSerie{
+			Labels: []protoparser.Label{
+				{Name: "foo", Value: "low"},
+				{Name: "i", Value: strconv.Itoa(i)},
+			},
+			Fingerprint: hash([]byte(fmt.Sprintf("foo=low,i=%d", i))),
+		})
+	}
+	for i := 0; i < 100; i++ {
+		tss = append(tss, protoparser.TimeSerie{
+			Labels: []protoparser.Label{
+				{Name: "foo", Value: "high"},
+				{Name: "i", Value: strconv.Itoa(i)},
+			},
+			Fingerprint: hash([]byte(fmt.Sprintf("foo=high,i=%d", i))),
+		})
+	}
+	e.insertMany(tss)
+
+	s := newSnapshot()
+	if err := e.toSnapshot(func(batchS *snapshot) error {
+		s.merge(batchS)
+		return nil
+	}); err != nil {
+		t.Fatalf("toSnapshot: %v", err)
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if err := s.writeMetrics(buf); err != nil {
+		t.Fatalf("writeMetrics: %v", err)
+	}
+	out := buf.String()
+
+	if strings.Contains(out, `by_foo="low"`) {
+		t.Fatalf("low-cardinality group must be suppressed by minCardinality=100\noutput:\n%s", out)
+	}
+	if !regexp.MustCompile(`by_foo="high"`).MatchString(out) {
+		t.Fatalf("high-cardinality group must be present\noutput:\n%s", out)
+	}
+	if !regexp.MustCompile(`vmestimator_cardinality_estimates_dropped\{[^}]+\} 1`).MatchString(out) {
+		t.Fatalf("dropped metric with count=1 must be present in output\noutput:\n%s", out)
+	}
 }

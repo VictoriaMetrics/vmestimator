@@ -366,8 +366,11 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 }
 
 func (e *estimator) writeMetrics(w io.Writer) {
+	var dropped uint64
 	if err := e.toSnapshot(func(s *snapshot) error {
-		return s.writeCardinalityEstimates(w)
+		d, err := s.writeCardinalityEstimates(w)
+		dropped += d
+		return err
 	}); err != nil {
 		logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
 	}
@@ -380,6 +383,11 @@ func (e *estimator) writeMetrics(w io.Writer) {
 			Filter:     eb0.filter,
 			Labels:     eb0.labels,
 			GroupLimit: eb0.groupSize.limit,
+		}
+		if dropped > 0 {
+			if err := s.writeDroppedMetric(w, dropped); err != nil {
+				logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+			}
 		}
 		if err := s.writeGroupSizeAndLimit(w, eb0.groupSize.totalSize()); err != nil {
 			logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
