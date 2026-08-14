@@ -9,14 +9,25 @@ import (
 )
 
 func TestParseRequestBody(t *testing.T) {
-	f := func(labelFP bool, input []prompb.TimeSeries, exp []TimeSerie) {
+	originalFPLabels := fpLabelsGlobal.Load()
+	t.Cleanup(func() {
+		fpLabelsGlobal.Store(originalFPLabels)
+	})
+
+	f := func(fpLabels bool, input []prompb.TimeSeries, exp []TimeSerie) {
 		t.Helper()
 		pbData := (&prompb.WriteRequest{Timeseries: input}).MarshalProtobuf(nil)
 		data := snappy.Encode(nil, pbData)
 
+		SetFingerprintLabels(fpLabels)
+
 		var act []TimeSerie
-		if err := parseRequestBody(data, labelFP, func(batch []TimeSerie) {
-			act = append(act, batch...)
+		if err := parseRequestBody(data, func(batch []TimeSerie) {
+			for _, ts := range batch {
+				labels := make([]Label, len(ts.Labels))
+				copy(labels, ts.Labels)
+				act = append(act, TimeSerie{Labels: labels, Fingerprint: ts.Fingerprint})
+			}
 		}); err != nil {
 			t.Fatalf("parseRequestBody: unexpected error: %s", err)
 		}

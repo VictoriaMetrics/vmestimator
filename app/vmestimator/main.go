@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
@@ -42,14 +43,16 @@ func main() {
 		logger.Fatalf("cannot load config: %v", err)
 	}
 
-	var labelFP bool
 	for _, e := range es {
 		for _, l := range e.groupBy {
 			if l == labelKeyword {
-				labelFP = true
+				protoparser.SetFingerprintLabels(true)
 			}
 		}
 	}
+
+	startWorkers()
+	defer stopWorkers()
 
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
@@ -77,13 +80,32 @@ func main() {
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			err := protoparser.Parse(r.Body, labelFP, func(tss []protoparser.TimeSerie) {
+			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+				const chunkSize = 100
 				esLen := uint32(len(es))
-				start := fastrand.Uint32n(esLen)
-				for j := uint32(0); j < esLen; j++ {
-					i := (start + j) % esLen
-					es[i].insertMany(tss)
+				wg := &sync.WaitGroup{}
+			loop:
+				for start := 0; start < len(tss); start += chunkSize {
+					end := start + chunkSize
+					if end > len(tss) {
+						end = len(tss)
+					}
+					tssChunk := tss[start:end]
+
+					esStart := fastrand.Uint32n(esLen)
+
+					for j := uint32(0); j < esLen; j++ {
+						idx := (esStart + j) % esLen
+						wg.Add(1)
+						select {
+						case workersCh <- workerReq{e: es[idx], wg: wg, tss: tssChunk}:
+						case <-r.Context().Done():
+							wg.Done()
+							break loop
+						}
+					}
 				}
+				wg.Wait()
 			})
 			if err != nil {
 				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)

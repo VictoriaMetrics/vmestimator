@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `-workers` flag for processing time series insertions concurrently. This improves throughput under high ingestion load. See [#42](https://github.com/VictoriaMetrics/vmestimator/pull/42).
+
 ## [v0.1.13](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.13)
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `-cardinalityMetrics.minCardinality` flag to suppress group-by cardinality estimates below the given threshold. When estimates are filtered, the number of suppressed groups is exposed via the `vmestimator_cardinality_estimates_dropped` metric. See [#41](https://github.com/VictoriaMetrics/vmestimator/pull/41).

@@ -509,9 +509,9 @@ Usage of ./bin/vmestimator:
   -cardinalityMetrics.exposeAt string
         HTTP path for exposing cardinality metrics. If set to the default /metrics, cardinality metrics are merged with regular metrics and exposed together. If set to a different path, only cardinality metrics are exposed at that endpoint. If set to an empty value, cardinality metrics are not exposed via HTTP at all. (default "/metrics")
   -cardinalityMetrics.minCardinality uint
-        Minimum cardinality estimate to expose for group-by streams. Estimates below this threshold are suppressed to reduce metric volume and noise. Set to 0 to expose all estimates (default 0).
+        Minimum cardinality estimate to expose. Estimates below this threshold are suppressed to reduce metric volume and noise. Set to 0 to expose all estimates (default 0).
   -config string
-        Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml for config example
+        Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example
   -enableTCP6
         Whether to enable IPv6 for listening and dialing. By default, only IPv4 TCP and UDP are used
   -envflag.enable
@@ -545,7 +545,7 @@ Usage of ./bin/vmestimator:
   -http.idleConnTimeout duration
         Timeout for incoming idle http connections (default 1m0s)
   -http.maxGracefulShutdownDuration duration
-        The maximum duration for a graceful shutdown of the HTTP server. A highly loaded server may require increased value for a graceful shutdown (default 7s)
+        The maximum duration for a graceful shutdown of the HTTP server. During this period the server stops accepting new connections, but it will continue serving existing connections. The remaining in-flight requests are canceled before the deadline, so the shutdown can finish within this duration. A highly loaded server may require increased value for a graceful shutdown (default 7s)
   -http.pathPrefix string
         An optional prefix to add to all the paths handled by http server. For example, if '-http.pathPrefix=/foo/bar' is set, then all the http requests will be handled on '/foo/bar/*' paths. This may be useful for proxied requests. See https://www.robustperception.io/using-external-urls-and-proxies-with-prometheus
   -http.shutdownDelay duration
@@ -652,4 +652,6 @@ Usage of ./bin/vmestimator:
         Each array item can contain comma inside single-quoted or double-quoted string, {}, [] and () braces.
   -version
         Show VictoriaMetrics version
+  -workers int
+        The number of workers for processing time series insertions concurrently. Each worker handles insertMany calls for a single estimator. Defaults to 2x the number of available CPUs. (default 20)
 ```
