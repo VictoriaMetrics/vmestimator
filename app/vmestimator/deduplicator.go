@@ -136,6 +136,7 @@ func (d *deduplicator) Stop() {
 
 func (d *deduplicator) runRotation() {
 	bucketDur := d.interval / 10
+	var prevRatio int64
 
 	for {
 		now := time.Now()
@@ -172,6 +173,10 @@ func (d *deduplicator) runRotation() {
 			d.prevSk = d.currSk
 			d.currSk = newSk
 			d.skMu.Unlock()
+		}
+
+		if ratio != prevRatio {
+			prevRatio = ratio
 			logger.Infof("deduplicator: unique series estimate=%d maxSize=%d passthrough=%d/1000", unique, d.maxSize, ratio)
 		}
 	}
