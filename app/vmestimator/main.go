@@ -60,7 +60,7 @@ func main() {
 		}
 		dedup = newDeduplicator(maxSize, *deduplicationInterval)
 		defer dedup.Stop()
-		logger.Infof("deduplicator enabled: interval=%s maxSize=%d", *deduplicationInterval, maxSize)
+		logger.Infof("deduplicator enabled: interval=%s maxSize=%d sizeBytes=%d", *deduplicationInterval, maxSize, maxSize*bitsPerItem/8)
 	}
 
 	if *cardinalityMetricsExposeAt == `/metrics` {
