@@ -15,7 +15,7 @@ func BenchmarkDeduplicator_filter(b *testing.B) {
 	const seriesCount = 10_000
 	tss := make([]protoparser.TimeSerie, seriesCount)
 	for i := range tss {
-		tss[i].Fingerprint = hash([]byte("foo"+strconv.Itoa(i)))
+		tss[i].Fingerprint = hash([]byte("foo" + strconv.Itoa(i)))
 	}
 
 	b.ResetTimer()
