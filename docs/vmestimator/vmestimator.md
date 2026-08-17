@@ -456,6 +456,43 @@ Additionally, every stream (including non-grouped ones) exposes:
 - `vmestimator_estimator_insert_total{group_by_keys, interval, filter}` — total number of samples inserted into this stream's estimator (only counts series that passed the `filter`)
 
 
+## Deduplication
+
+Processing each time series is CPU-intensive: vmestimator must iterate over all labels, resolve group-by values, and call HLL insert for every estimator.
+For `__label__` streams it is even more expensive, as HLL insert is called once per label per series.
+
+Scraped time series are mostly identical between scrapes on short intervals.
+Once a series has been seen, re-processing it within the same window does not change the cardinality estimate.
+Deduplication exploits this by dropping already-seen series before they reach the estimators, reducing CPU usage without affecting accuracy.
+
+Enable deduplication with `-deduplication.interval`:
+
+```bash
+/path/to/vmestimator -config=streams.yaml -deduplication.interval=2m
+```
+
+When enabled, vmestimator tracks which time series it has already seen within the configured window using bloom filters.
+Series seen within the window are dropped before reaching the estimators.
+Set the interval 3–5× lower than the shortest estimator interval to ensure estimates remain accurate.
+
+**Memory budget**
+
+By default, the deduplicator uses 5% of the allowed memory (see `-memory.allowedBytes` / `-memory.allowedPercent`).
+To set an explicit limit use `-deduplication.maxSizeBytes` (e.g. `100MB`) or `-deduplication.maxSize` (number of unique series).
+When both flags are set, the stricter limit applies.
+
+**Overflow behaviour**
+
+When the true number of unique series exceeds 80% of the configured limit, the deduplicator gradually switches to pass-through mode for the excess series.
+This prevents bloom filter saturation (which would cause false positives) and keeps memory usage bounded.
+The pass-through ratio is logged whenever it changes:
+
+```
+deduplicator: unique series estimate=1200000 maxSize=1000000 passthrough=167/1000
+```
+
+A ratio of `0/1000` means full deduplication; `1000/1000` means all series pass through unchanged.
+
 ## Dashboards
 
 Two Grafana dashboards are available in the [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards) directory:
@@ -512,6 +549,13 @@ Usage of ./bin/vmestimator:
         Minimum cardinality estimate to expose. Estimates below this threshold are suppressed to reduce metric volume and noise. Set to 0 to expose all estimates (default 0).
   -config string
         Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example
+  -deduplication.interval duration
+        Time window for deduplication. When set, time series already seen within the window are dropped before being forwarded to estimators. Disabled when set to 0.
+  -deduplication.maxSize int
+        Maximum number of unique time series the deduplicator tracks. Pass-through begins at 80% of this limit so bloom filters never saturate and start producing false positives. Defaults to a value derived from 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.
+  -deduplication.maxSizeBytes size
+        Memory budget for deduplication bloom filters, e.g. 100MB. Controls how many unique time series can be tracked before the deduplicator gradually switches to pass-through mode. Pass-through starts at 80% of the limit to keep bloom filters well below saturation. Defaults to 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.
+        Supports the following optional suffixes for size values: KB, MB, GB, TB, KiB, MiB, GiB, TiB (default 0)
   -enableTCP6
         Whether to enable IPv6 for listening and dialing. By default, only IPv4 TCP and UDP are used
   -envflag.enable
