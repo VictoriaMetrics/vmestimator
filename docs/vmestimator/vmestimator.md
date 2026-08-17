@@ -487,10 +487,6 @@ When the true number of unique series exceeds 80% of the configured limit, the d
 This prevents bloom filter saturation (which would cause false positives) and keeps memory usage bounded.
 The pass-through ratio is logged whenever it changes:
 
-```
-deduplicator: unique series estimate=1200000 maxSize=1000000 passthrough=167/1000
-```
-
 A ratio of `0/1000` means full deduplication; `1000/1000` means all series pass through unchanged.
 
 ## Dashboards
