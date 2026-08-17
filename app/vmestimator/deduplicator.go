@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/memory"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
-	"github.com/axiomhq/hyperloglog"
 )
 
 var (
@@ -59,10 +57,10 @@ type deduplicator struct {
 	// smoothing CPU spikes across time.
 	bfs [10]atomic.Pointer[deduplicatorBloomFilter]
 
-	// HLL sketches for estimating the true unique-series count.
-	skMu   sync.Mutex
-	currSk *hyperloglog.Sketch
-	prevSk *hyperloglog.Sketch
+	// e estimates the true unique-series count using an estimator in global
+	// mode (no group_by). Its sharded buckets avoid any global lock on the
+	// write path.
+	e *estimator
 
 	// Gradual pass-through ratio stored per-1000.
 	// 0 = deduplicate all; 1000 = pass everything through.
@@ -72,20 +70,33 @@ type deduplicator struct {
 	stopCh chan struct{}
 }
 
+const (
+	deduplicationMinMaxSize  = 9999
+	deduplicationMinInterval = time.Second * 30
+)
+
 func newDeduplicator(maxSize int, interval time.Duration) *deduplicator {
-	if maxSize <= 0 {
-		panic("BUG: maxSize must be greater than 1000")
+	if maxSize <= deduplicationMinMaxSize {
+		panic(fmt.Sprintf("BUG: maxSize must be greater than %d; got %d", deduplicationMinMaxSize, maxSize))
 	}
-	if interval <= 0 {
-		panic("BUG: interval must be greater than 30s")
+	if interval <= deduplicationMinInterval {
+		panic(fmt.Sprintf("BUG: interval must be greater than %v; got %v", deduplicationMinInterval, interval))
+	}
+
+	e, err := newEstimator(EstimatorConfig{
+		Interval: interval,
+		HLLSparse: new(false),
+		HLLPrecision: 12,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("BUG: cannot create deduplicator estimator: %s", err))
 	}
 
 	d := &deduplicator{
 		maxSize:       maxSize,
 		interval:      interval,
 		bucketMaxSize: maxSize / 10,
-		currSk:        newDeduplicatorSketch(),
-		prevSk:        newDeduplicatorSketch(),
+		e:             e,
 		stopCh:        make(chan struct{}),
 	}
 
@@ -101,13 +112,14 @@ func newDeduplicator(maxSize int, interval time.Duration) *deduplicator {
 // src is the incoming batch; dst is the destination slice (may be nil or pre-allocated).
 // The returned slice contains only time series that should be forwarded to estimators.
 func (d *deduplicator) filter(src, dst []protoparser.TimeSerie) []protoparser.TimeSerie {
-	// Update HLL with every incoming series before filtering, so cardinality
-	// estimates reflect true inbound volume regardless of deduplication decisions.
-	d.skMu.Lock()
-	for i := range src {
-		d.currSk.InsertHash(src[i].Fingerprint)
+	if len(src) == 0 {
+		return dst
 	}
-	d.skMu.Unlock()
+
+	// Update the estimator with every incoming series before filtering, so
+	// cardinality estimates reflect true inbound volume regardless of deduplication
+	// decisions.
+	d.e.insertMany(src)
 
 	passthrough := d.passthroughPer1000.Load()
 
@@ -133,6 +145,7 @@ func (d *deduplicator) filter(src, dst []protoparser.TimeSerie) []protoparser.Ti
 
 func (d *deduplicator) Stop() {
 	close(d.stopCh)
+	d.e.stop()
 }
 
 func (d *deduplicator) runRotation() {
@@ -154,12 +167,8 @@ func (d *deduplicator) runRotation() {
 		d.bfs[idx].Store(newDeduplicatorBloomFilter(d.bucketMaxSize))
 
 		// Recalculate pass-through ratio after each bucket rotation.
-		d.skMu.Lock()
-		resSk := newDeduplicatorSketch()
-		_ = resSk.Merge(d.currSk)
-		_ = resSk.Merge(d.prevSk)
-		d.skMu.Unlock()
-		unique := resSk.Estimate()
+		// The estimator handles its own sketch rotation; we just read the estimate.
+		unique := d.e.estimate()
 
 		// Start pass-through at 80% of maxSize so the bloom filters never
 		// reach saturation: at full capacity false-positive rate spikes,
@@ -170,15 +179,6 @@ func (d *deduplicator) runRotation() {
 			ratio = int64((unique - passthroughThreshold) * 1000 / unique)
 		}
 		d.passthroughPer1000.Store(ratio)
-
-		// Rotate HLL sketches once per full interval (every 10 bucket rotations).
-		if idx == 0 {
-			newSk := newDeduplicatorSketch()
-			d.skMu.Lock()
-			d.prevSk = d.currSk
-			d.currSk = newSk
-			d.skMu.Unlock()
-		}
 
 		if ratio != prevRatio {
 			prevRatio = ratio
@@ -254,20 +254,6 @@ func newBits(maxItems uint64) []uint64 {
 	return make([]uint64, (bitsCount+63)/64)
 }
 
-func newDeduplicatorSketch() *hyperloglog.Sketch {
-	sk, err := hyperloglog.NewSketch(12, false)
-	if err != nil {
-		panic(fmt.Sprintf("BUG: hyperloglog: new sketch: %s", err))
-	}
-	return sk
-}
-
 func convertDeduplicatorMaxSizeBytesToItems(bytes int) int {
-	// Subtract memory used by the two HLL sketches (2 * 2^12 bytes).
-	skBytes := 2 * (1 << 12)
-	bytes -= skBytes
-	if bytes <= 0 {
-		return 0
-	}
 	return bytes * 8 / bitsPerItem
 }

@@ -55,10 +55,15 @@ func main() {
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
 		maxSize := resolveDeduplicatorMaxSize()
-		if maxSize <= 0 {
-			logger.Fatalf("deduplicator maxSize must be greater than 0; set -deduplication.maxSize or -deduplication.maxSizeBytes")
+		if maxSize <= deduplicationMinMaxSize {
+			logger.Fatalf("deduplicator maxSize must be greater than %d; got %d. Set -deduplication.maxSize or -deduplication.maxSizeBytes", maxSize, deduplicationMinMaxSize)
 		}
-		dedup = newDeduplicator(maxSize, *deduplicationInterval)
+		interval := *deduplicationInterval
+		if interval < deduplicationMinInterval {
+			logger.Fatalf("deduplication interval must be greater than %v; got %v", deduplicationMinInterval, interval)
+		}
+
+		dedup = newDeduplicator(maxSize, interval)
 		defer dedup.Stop()
 		passthroughThreshold := maxSize * 4 / 5
 		logger.Infof("deduplicator enabled: interval=%s maxSize=%d passthroughThreshold=%d sizeBytes=%d", *deduplicationInterval, maxSize, passthroughThreshold, maxSize*bitsPerItem/8)
