@@ -84,8 +84,8 @@ func newDeduplicator(maxSize int, interval time.Duration) *deduplicator {
 	}
 
 	e, err := newEstimator(EstimatorConfig{
-		Interval: interval,
-		HLLSparse: new(false),
+		Interval:     interval,
+		HLLSparse:    new(false),
 		HLLPrecision: 12,
 	})
 	if err != nil {
