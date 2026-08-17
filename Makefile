@@ -58,13 +58,6 @@ vmestimator-crossbuild: \
 	vmestimator-openbsd-amd64 \
 	vmestimator-windows-amd64
 
-publish-final-images:
-	PKG_TAG=$(TAG) APP_NAME=vmestimator $(MAKE) publish-via-docker-from-rc && \
-	PKG_TAG=$(TAG) $(MAKE) publish-latest
-
-publish-latest:
-	PKG_TAG=$(TAG) APP_NAME=vmestimator $(MAKE) publish-via-docker-latest
-
 release:
 	$(MAKE_PARALLEL) \
 		release-vmestimator
