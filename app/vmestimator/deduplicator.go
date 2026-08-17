@@ -73,10 +73,10 @@ type deduplicator struct {
 }
 
 func newDeduplicator(maxSize int, interval time.Duration) *deduplicator {
-	if maxSize <= 1000 {
+	if maxSize <= 0 {
 		panic("BUG: maxSize must be greater than 1000")
 	}
-	if interval <= time.Second*30 {
+	if interval <= 0 {
 		panic("BUG: interval must be greater than 30s")
 	}
 
