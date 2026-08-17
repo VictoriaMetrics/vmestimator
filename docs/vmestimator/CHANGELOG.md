@@ -16,6 +16,10 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.15](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.15)
+
+Released at 2026-08-17
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add time series deduplicator to drop duplicate series within a configurable time window before forwarding to estimators. Use `-deduplication.interval` to enable it, `-deduplication.maxSizeBytes` or `-deduplication.maxSize` to cap memory usage. When cardinality approaches 80% of the limit, the deduplicator gradually falls back to pass-through mode to keep bloom filters below saturation. See [#44](https://github.com/VictoriaMetrics/vmestimator/pull/44).
 
 ## [v0.1.14](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.14)
