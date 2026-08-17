@@ -16,10 +16,10 @@ var (
 	deduplicationInterval    = flag.Duration("deduplication.interval", 0, "Time window for deduplication. When set, time series already seen within the window are dropped before being forwarded to estimators. Disabled when set to 0.")
 	deduplicatorMaxSizeBytes = flagutil.NewBytes("deduplication.maxSizeBytes", 0, "Memory budget for deduplication bloom filters, e.g. 100MB. "+
 		"Controls how many unique time series can be tracked before the deduplicator gradually switches to pass-through mode. "+
-		"Pass-through starts at 80%% of the limit to keep bloom filters well below saturation. "+
+		"Pass-through starts at 80% of the limit to keep bloom filters well below saturation. "+
 		"Defaults to 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.")
 	deduplicatorMaxSize = flag.Int("deduplication.maxSize", 0, "Maximum number of unique time series the deduplicator tracks. "+
-		"Pass-through begins at 80%% of this limit so bloom filters never saturate and start producing false positives. "+
+		"Pass-through begins at 80% of this limit so bloom filters never saturate and start producing false positives. "+
 		"Defaults to a value derived from 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.")
 )
 
