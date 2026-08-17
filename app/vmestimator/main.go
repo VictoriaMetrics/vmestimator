@@ -6,7 +6,6 @@ import (
 	"flag"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +32,6 @@ var (
 )
 
 func main() {
-	flag.CommandLine.SetOutput(os.Stdout)
 	envflag.Parse()
 	buildinfo.Init()
 	logger.Init()
@@ -53,6 +51,23 @@ func main() {
 
 	startWorkers()
 	defer stopWorkers()
+
+	var dedup *deduplicator
+	if *deduplicationInterval > 0 {
+		maxSize := resolveDeduplicatorMaxSize()
+		if maxSize <= deduplicationMinMaxSize {
+			logger.Fatalf("deduplicator maxSize must be greater than %d; got %d. Set -deduplication.maxSize or -deduplication.maxSizeBytes", maxSize, deduplicationMinMaxSize)
+		}
+		interval := *deduplicationInterval
+		if interval < deduplicationMinInterval {
+			logger.Fatalf("deduplication interval must be greater than %v; got %v", deduplicationMinInterval, interval)
+		}
+
+		dedup = newDeduplicator(maxSize, interval)
+		defer dedup.Stop()
+		passthroughThreshold := maxSize * 4 / 5
+		logger.Infof("deduplicator enabled: interval=%s maxSize=%d passthroughThreshold=%d sizeBytes=%d", *deduplicationInterval, maxSize, passthroughThreshold, maxSize*bitsPerItem/8)
+	}
 
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
@@ -81,6 +96,12 @@ func main() {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
 			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+				if dedup != nil {
+					tss = dedup.filter(tss, tss[:0])
+					if len(tss) == 0 {
+						return
+					}
+				}
 				const chunkSize = 100
 				esLen := uint32(len(es))
 				wg := &sync.WaitGroup{}
