@@ -60,7 +60,8 @@ func main() {
 		}
 		dedup = newDeduplicator(maxSize, *deduplicationInterval)
 		defer dedup.Stop()
-		logger.Infof("deduplicator enabled: interval=%s maxSize=%d sizeBytes=%d", *deduplicationInterval, maxSize, maxSize*bitsPerItem/8)
+		passthroughThreshold := maxSize * 4 / 5
+		logger.Infof("deduplicator enabled: interval=%s maxSize=%d passthroughThreshold=%d sizeBytes=%d", *deduplicationInterval, maxSize, passthroughThreshold, maxSize*bitsPerItem/8)
 	}
 
 	if *cardinalityMetricsExposeAt == `/metrics` {
@@ -92,6 +93,9 @@ func main() {
 			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
 				if dedup != nil {
 					tss = dedup.filter(tss, tss[:0])
+					if len(tss) == 0 {
+						return
+					}
 				}
 				const chunkSize = 100
 				esLen := uint32(len(es))

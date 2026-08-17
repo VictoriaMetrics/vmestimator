@@ -18,9 +18,10 @@ var (
 	deduplicationInterval    = flag.Duration("deduplication.interval", 0, "Time window for deduplication. When set, time series already seen within the window are dropped before being forwarded to estimators. Disabled when set to 0.")
 	deduplicatorMaxSizeBytes = flagutil.NewBytes("deduplication.maxSizeBytes", 0, "Memory budget for deduplication bloom filters, e.g. 100MB. "+
 		"Controls how many unique time series can be tracked before the deduplicator gradually switches to pass-through mode. "+
+		"Pass-through starts at 80%% of the limit to keep bloom filters well below saturation. "+
 		"Defaults to 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.")
 	deduplicatorMaxSize = flag.Int("deduplication.maxSize", 0, "Maximum number of unique time series the deduplicator tracks. "+
-		"When the true cardinality exceeds this limit, the deduplicator gradually passes through the excess series instead of deduplicating them. "+
+		"Pass-through begins at 80%% of this limit so bloom filters never saturate and start producing false positives. "+
 		"Defaults to a value derived from 5 percent of allowed memory. When both -deduplication.maxSizeBytes and -deduplication.maxSize are set, the stricter limit is used.")
 )
 
@@ -160,9 +161,13 @@ func (d *deduplicator) runRotation() {
 		d.skMu.Unlock()
 		unique := resSk.Estimate()
 
+		// Start pass-through at 80% of maxSize so the bloom filters never
+		// reach saturation: at full capacity false-positive rate spikes,
+		// which would silently drop legitimate new series.
+		passthroughThreshold := uint64(d.maxSize) * 4 / 5
 		var ratio int64
-		if unique > uint64(d.maxSize) {
-			ratio = int64((unique - uint64(d.maxSize)) * 1000 / unique)
+		if unique > passthroughThreshold {
+			ratio = int64((unique - passthroughThreshold) * 1000 / unique)
 		}
 		d.passthroughPer1000.Store(ratio)
 
