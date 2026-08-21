@@ -46,11 +46,13 @@ We recommend deploying `vmestimator` close to the metrics source, ideally alongs
 Configure each `vmagent` to [replicate](https://docs.victoriametrics.com/vmagent/index.html#replication-and-high-availability) all metrics into the vmestimator.
 
 Run vmestimator:
+
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
 ```
 
 Run vmagent:
+
 ```bash
 /path/to/vmagent \
   -remoteWrite.url=http://127.0.0.1:8428/api/v1/write \ # main remote destination
@@ -86,6 +88,7 @@ The resulting topology looks like this:
 
 Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml).
 Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
+
 ```bash
 docker run --rm \
   -p 8490:8490 \
@@ -101,13 +104,14 @@ To build from sources, see [How to build from sources](https://github.com/Victor
 
 ## Configuration
 
-To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml):
+To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml)):
 
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
 ```
 
 Config reference:
+
 ```yaml
 streams:
   -
@@ -152,8 +156,8 @@ streams:
     # Once the limit is reached, excess groups are counted in a single shared "rejected" sketch
     # rather than getting their own entry. Acts as a memory cap and a safeguard against OOM
     # when the group_by label values grow unboundedly.
-    # Memory upper bound per stream: 
-    #   group_limit * 2^hll_precision bytes. 
+    # Memory upper bound per stream:
+    #   group_limit * 2^hll_precision bytes.
     #
     # default: 10000
     group_limit: <integer>
@@ -187,7 +191,7 @@ streams:
     # Useful when multiple vmestimator instances feed the same storage and you need
     # to distinguish their estimates in dashboards and alerts.
     labels:
-      <labelname>: <labelvalue> ... 
+      <labelname>: <labelvalue> ...
 ```
 
 ## Cardinality Metrics
@@ -196,12 +200,14 @@ Cardinality estimates are exposed as the `cardinality_estimate` metric.
 All metrics include `interval`, `filter`, `group_by_keys`, `group_by_values`, and any static labels defined in the stream config.
 
 For global estimates (no `group_by` configured), `group_by_keys` is `__global__` and `group_by_values` is omitted:
+
 ```
 cardinality_estimate{interval="1h0m0s",filter="",group_by_keys="__global__"} 142300
 ```
 
 For grouped estimates, one summary line shows the total number of distinct groups `group_by_keys="__group__"`, followed by one line per distinct label value combination.
 Each per-group line also includes individual `by_{key}="{val}"` labels:
+
 ```
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="instance,job"} 2
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",group_by_values="host1:9090,prometheus",by_instance="host1:9090",by_job="prometheus"} 312
@@ -209,6 +215,7 @@ cardinality_estimate{interval="5m0s",filter="",group_by_keys="instance,job",grou
 ```
 
 For `__label__` streams, the group value is the label name and `by__label__` holds it:
+
 ```
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="__group__",group_by_values="__label__"} 3
 cardinality_estimate{interval="5m0s",filter="",group_by_keys="__label__",group_by_values="__name__",by__label__="__name__"} 450
@@ -221,6 +228,7 @@ and excess groups are counted in a single shared "rejected" sketch rather than g
 
 By default, cardinality estimates are merged with the estimator's operational metrics and exposed at `/metrics`.
 This is controlled by the `-cardinalityMetrics.exposeAt` flag:
+
 - `-cardinalityMetrics.exposeAt=/metrics` (default): cardinality metrics merged with operational metrics at `/metrics`
 - `-cardinalityMetrics.exposeAt=/cardinality/metrics`: cardinality metrics exposed at separate path
 - `-cardinalityMetrics.exposeAt=`: cardinality metrics not exposed via HTTP
@@ -238,6 +246,7 @@ Set to `0` to disable caching entirely.
 ### Basic
 
 Global cardinality:
+
 ```yaml
 # streams.yaml
 
@@ -245,6 +254,7 @@ Global cardinality:
 ```
 
 Per metric name cardinality:
+
 ```yaml
 # streams.yaml
 
@@ -253,6 +263,7 @@ Per metric name cardinality:
 ```
 
 Per job label cardinality:
+
 ```yaml
 # streams.yaml
 
@@ -261,6 +272,7 @@ Per job label cardinality:
 ```
 
 Per tenant cardinality:
+
 ```yaml
 # streams.yaml
 
@@ -269,6 +281,7 @@ Per tenant cardinality:
 ```
 
 Cardinality scoped to a single job:
+
 ```yaml
 # streams.yaml
 
@@ -278,6 +291,7 @@ Cardinality scoped to a single job:
 ```
 
 Cardinality excluding non-production environments:
+
 ```yaml
 # streams.yaml
 
@@ -286,6 +300,7 @@ Cardinality excluding non-production environments:
 ```
 
 Per label unique values:
+
 ```yaml
 # streams.yaml
 
@@ -304,6 +319,7 @@ Can be narrowed to a specific job: `['job', '__label__']`.
 This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
 
 To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`15m`) and a long one (`30m`):
+
 ```yaml
 # streams.yaml
 
@@ -318,6 +334,7 @@ When churn is low, both estimates are roughly equal.
 When churn is high, the `30m` estimate grows significantly larger than the `15m` estimate, because the long window accumulates series that have already disappeared.
 
 The following query computes the churn ratio per job:
+
 ```
 (
     sum(
@@ -346,6 +363,7 @@ Pre-built alert rules for cardinality monitoring are available in
 [deployment/docker/rules/alerts-cardinality.yml](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml).
 
 They require two streams with the same `group_by` but different intervals to also support churn detection:
+
 ```yaml
 # streams.yaml
 # or use example config:
@@ -381,16 +399,19 @@ All alerts link to the [Cardinality Explorer dashboard](https://play-grafana.vic
 Cardinality can be estimated with PromQL.
 
 Global cardinality:
+
 ```
 count({__name__=~".*"})
 ```
 
 Top ten metric names by cardinality:
+
 ```
 topk(10, count({__name__=~".*"}) by (__name__))
 ```
 
 Top ten jobs by cardinality:
+
 ```
 topk(10, count({__name__=~".*"}) by (job))
 ```
@@ -419,6 +440,7 @@ Instances are split into two roles: **storage nodes** accept Prometheus remote w
 ![cluster](/victoriametrics/vmestimator/cluster.webp)
 
 **Storage nodes:**
+
 ```
 vmestimator -config=streams.yaml -httpListenAddr=:8491 -cardinalityMetrics.exposeAt=/cardinality/metrics
 vmestimator -config=streams.yaml -httpListenAddr=:8492 -cardinalityMetrics.exposeAt=/cardinality/metrics
@@ -426,6 +448,7 @@ vmestimator -config=streams.yaml -httpListenAddr=:8493 -cardinalityMetrics.expos
 ```
 
 **Selector nodes:**
+
 ```
 vmestimator -storageNode=http://vmestimator-storage-1:8491 \
             -storageNode=http://vmestimator-storage-2:8492 \
@@ -439,6 +462,7 @@ A selector with `-storageNode` flags and no `-config` runs without local estimat
 
 When multiple selector nodes are scraped, each returns a fully merged estimate.
 Deduplicate at query time to avoid overcounting:
+
 ```
 max(cardinality_estimate) without (instance)
 ```
@@ -454,7 +478,6 @@ Each stream with a non-empty `group_by` exposes the following operational metric
 Additionally, every stream (including non-grouped ones) exposes:
 
 - `vmestimator_estimator_insert_total{group_by_keys, interval, filter}` — total number of samples inserted into this stream's estimator (only counts series that passed the `filter`)
-
 
 ## Deduplication
 
@@ -504,11 +527,13 @@ Two Grafana dashboards are available in the [dashboards](https://github.com/Vict
 It is recommended to use the [docker images](https://hub.docker.com/r/victoriametrics/vmestimator).
 
 Development build:
+
 1. [Install Go](https://golang.org/doc/install).
 1. Run `make vmestimator` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
    It builds `vmestimator` binary and places it into the `bin` folder.
 
 Production build:
+
 1. [Install docker](https://docs.docker.com/install/).
 1. Run `make vmestimator-prod` from the root folder of [the repository](https://github.com/VictoriaMetrics/vmestimator).
    It builds `vmestimator-prod` binary and puts it into the `bin` folder.
@@ -527,6 +552,7 @@ ROOT_IMAGE=scratch make package-vmrestore
 ```
 
 You can build and publish to your own registry and namespace:
+
 ```
 DOCKER_REGISTRIES=ghcr.io DOCKER_NAMESPACE=foo make publish-vmagent
 ```
