@@ -104,7 +104,7 @@ To build from sources, see [How to build from sources](https://github.com/Victor
 
 ## Configuration
 
-To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/cestimator/blob/main/streams.yaml)):
+To run vmestimator a `streams.yaml` config has to be provided (see [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml)):
 
 ```bash
 /path/to/vmestimator -config=streams.yaml # -httpListenAddr=:8490
