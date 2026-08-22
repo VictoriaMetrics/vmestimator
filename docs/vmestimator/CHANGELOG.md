@@ -41,11 +41,11 @@ Released at 2026-08-17
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `filter` field to stream configuration for filtering time series by label matchers before counting. Supports equality (`=`), negative equality (`!=`), regexp (`=~`), and negative regexp (`!~`) matchers in MetricsQL selector syntax, e.g. `{job="api",env!~"dev|staging"}`. See [#29](https://github.com/VictoriaMetrics/vmestimator/pull/29).
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): decouple metrics generation logic from estimator. Do it via snapshot. This refactoring opens ways to implement upcoming profiler related features.
 
-* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): revert prev sketches reuse of HLL sketches as it hurts estimate precision. 
+* BUGFIX: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): revert prev sketches reuse of HLL sketches as it hurts estimate precision.
 
 ## [v0.1.10](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.10)
 
-* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): Reduce memory presure on rotation by reusing HLL sketches from previous group. 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): Reduce memory pressure on rotation by reusing HLL sketches from previous group.
 
 ## [v0.1.9](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.9)
 
