@@ -1,11 +1,11 @@
 module github.com/VictoriaMetrics/vmestimator
 
-go 1.26.6
+go 1.27.0
 
 replace github.com/axiomhq/hyperloglog => github.com/makasim/hyperloglog v0.0.14-reuse-memory
 
 require (
-	github.com/VictoriaMetrics/VictoriaMetrics v1.149.0
+	github.com/VictoriaMetrics/VictoriaMetrics v1.150.0
 	github.com/VictoriaMetrics/easyproto v1.2.0
 	github.com/VictoriaMetrics/metrics v1.44.0
 	github.com/VictoriaMetrics/metricsql v0.87.3
