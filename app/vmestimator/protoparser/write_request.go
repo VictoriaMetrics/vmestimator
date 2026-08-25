@@ -3,7 +3,6 @@ package protoparser
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
 	"github.com/VictoriaMetrics/easyproto"
@@ -24,20 +23,11 @@ type Label struct {
 	Fingerprint uint64
 }
 
-type WriteRequest struct {
-	// Timeseries is a list of time series in the given WriteRequest
-	Timeseries []TimeSerie
-}
-
-// Reset resets wr for subsequent reuse.
-func (wr *WriteRequest) Reset() {
-	wr.Timeseries = ResetTimeSeries(wr.Timeseries)
-}
-
 func getWriteRequestUnmarshaler() *writeRequestUnmarshaler {
 	v := wruPool.Get()
 	if v == nil {
 		return &writeRequestUnmarshaler{
+			tss:        make([]TimeSerie, 0, 1024),
 			labelsPool: make([]Label, 0, 4096),
 		}
 	}
@@ -56,63 +46,68 @@ var wruPool sync.Pool
 // It maintains internal pools for labels and samples to reduce memory allocations.
 // See UnmarshalProtobuf for details on how to use it.
 type writeRequestUnmarshaler struct {
-	wr WriteRequest
-
+	tss        []TimeSerie
 	labelsPool []Label
 }
 
 // Reset resets wru, so it could be re-used.
 func (wru *writeRequestUnmarshaler) Reset() {
-	wru.wr.Reset()
-
-	clear(wru.labelsPool)
+	wru.tss = wru.tss[:0]
 	wru.labelsPool = wru.labelsPool[:0]
 }
 
-func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte) (*WriteRequest, error) {
+func (wru *writeRequestUnmarshaler) UnmarshalProtobuf(src []byte, labelFP bool, callback func(tss []TimeSerie)) error {
 	wru.Reset()
 
-	fpLabels := fpLabelsGlobal.Load()
-
 	var err error
+
+	tss := wru.tss
 
 	// message WriteRequest {
 	//    repeated TimeSeries timeseries = 1;
 	//    reserved 2;
 	//    repeated Metadata metadata = 3;
 	// }
-	tss := wru.wr.Timeseries
 	labelsPool := wru.labelsPool
 	var fc easyproto.FieldContext
 	for len(src) > 0 {
+		if len(tss) >= cap(tss) {
+			callback(tss)
+			tss = tss[:0]
+			labelsPool = labelsPool[:0]
+		}
+
 		src, err = fc.NextField(src)
 		if err != nil {
-			return nil, fmt.Errorf("cannot read the next field: %w", err)
+			return fmt.Errorf("cannot read the next field: %w", err)
 		}
 		switch fc.FieldNum {
 		case 1:
 			data, ok := fc.MessageData()
 			if !ok {
-				return nil, fmt.Errorf("cannot read timeseries data")
+				return fmt.Errorf("cannot read timeseries data")
 			}
-			if len(tss) < cap(tss) {
-				tss = tss[:len(tss)+1]
-			} else {
-				tss = append(tss, TimeSerie{})
-			}
+			tss = tss[:len(tss)+1]
 			ts := &tss[len(tss)-1]
-			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, fpLabels)
+			labelsPool, err = ts.unmarshalProtobuf(data, labelsPool, labelFP)
 			if err != nil {
-				return nil, fmt.Errorf("cannot unmarshal timeseries: %w", err)
+				return fmt.Errorf("cannot unmarshal timeseries: %w", err)
 			}
 		}
 	}
-	wru.wr.Timeseries = tss
+
+	if len(tss) > 0 {
+		callback(tss)
+		tss = tss[:0]
+		labelsPool = labelsPool[:0]
+	}
+
+	wru.tss = tss[:0]
 	wru.labelsPool = labelsPool
-	return &wru.wr, nil
+	return nil
 }
 
-func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, fpLabels bool) ([]Label, error) {
+func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, labelFP bool) ([]Label, error) {
 	// message TimeSeries {
 	//   repeated Label labels   = 1;
 	//   repeated Sample samples = 2;
@@ -124,7 +119,7 @@ func (ts *TimeSerie) unmarshalProtobuf(src []byte, labelsPool []Label, fpLabels 
 	digestLabel := func(value []byte) uint64 {
 		return 0
 	}
-	if fpLabels {
+	if labelFP {
 		ld := getDigest()
 		defer putDigest(ld)
 
@@ -198,16 +193,4 @@ var xxhashPool = &sync.Pool{
 	New: func() any {
 		return xxhash.New()
 	},
-}
-
-var fpLabelsGlobal atomic.Bool
-
-func SetFingerprintLabels(b bool) {
-	fpLabelsGlobal.Store(b)
-}
-
-// ResetTimeSeries clears all the GC references from tss and returns an empty tss ready for further use.
-func ResetTimeSeries(tss []TimeSerie) []TimeSerie {
-	clear(tss)
-	return tss[:0]
 }

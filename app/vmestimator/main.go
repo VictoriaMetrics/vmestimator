@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
@@ -41,16 +40,14 @@ func main() {
 		logger.Fatalf("cannot load config: %v", err)
 	}
 
+	var labelFP bool
 	for _, e := range es {
 		for _, l := range e.groupBy {
 			if l == labelKeyword {
-				protoparser.SetFingerprintLabels(true)
+				labelFP = true
 			}
 		}
 	}
-
-	startWorkers()
-	defer stopWorkers()
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -95,38 +92,21 @@ func main() {
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+
+			err := protoparser.Parse(r.Body, labelFP, func(tss []protoparser.TimeSerie) {
 				if dedup != nil {
 					tss = dedup.filter(tss, tss[:0])
 					if len(tss) == 0 {
 						return
 					}
 				}
-				const chunkSize = 100
 				esLen := uint32(len(es))
-				wg := &sync.WaitGroup{}
-			loop:
-				for start := 0; start < len(tss); start += chunkSize {
-					end := start + chunkSize
-					if end > len(tss) {
-						end = len(tss)
-					}
-					tssChunk := tss[start:end]
+				start := fastrand.Uint32n(esLen)
+				for j := uint32(0); j < esLen; j++ {
+					i := (start + j) % esLen
 
-					esStart := fastrand.Uint32n(esLen)
-
-					for j := uint32(0); j < esLen; j++ {
-						idx := (esStart + j) % esLen
-						wg.Add(1)
-						select {
-						case workersCh <- workerReq{e: es[idx], wg: wg, tss: tssChunk}:
-						case <-r.Context().Done():
-							wg.Done()
-							break loop
-						}
-					}
+					es[i].insertMany(tss)
 				}
-				wg.Wait()
 			})
 			if err != nil {
 				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)
