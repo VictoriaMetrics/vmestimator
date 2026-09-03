@@ -133,6 +133,8 @@ func (d *deduplicator) filter(src, dst []protoparser.TimeSerie) []protoparser.Ti
 }
 
 func (d *deduplicator) Stop() {
+	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_max_size`)
+	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_size`)
 	close(d.stopCh)
 }
 

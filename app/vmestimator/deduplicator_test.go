@@ -129,4 +129,3 @@ func TestDeduplicator_filterSaturated(t *testing.T) {
 		t.Fatalf("saturated: expected pass-through on second call, got %v", got)
 	}
 }
-
