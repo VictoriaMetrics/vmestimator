@@ -28,6 +28,8 @@ type estimator struct {
 
 	hasLabelKeyword bool
 
+	minCardinality *uint64
+
 	buckets []*estimatorBucket
 
 	metricsSet  *metrics.Set
@@ -82,6 +84,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		compiledFilter:  cf,
+		minCardinality:  cfg.MinCardinality,
 		groupSize: &groupSize{
 			limit:          int64(cfg.GroupLimit),
 			bucketSizes:    make([]int64, cfg.Buckets),
@@ -287,6 +290,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		s.Filter = eb0.filter
 		s.Labels = eb0.labels
 		s.GroupBy = nil
+		s.MinCardinality = e.minCardinality
 		return cb(s)
 	}
 
@@ -298,6 +302,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.Interval = eb0.interval
 	s.Filter = eb0.filter
 	s.Labels = eb0.labels
+	s.MinCardinality = e.minCardinality
 
 	skp := newSketchesPool(eb0.precision, min(batchSize, eb0.groupSize.avgBucketSize()))
 	keys := make([]uint64, 0, batchSize)
@@ -390,11 +395,12 @@ func (e *estimator) writeMetrics(w io.Writer) {
 	if len(e.groupBy) > 0 {
 		eb0 := e.buckets[0]
 		s := &snapshot{
-			GroupBy:    eb0.groupBy,
-			Interval:   eb0.interval,
-			Filter:     eb0.filter,
-			Labels:     eb0.labels,
-			GroupLimit: eb0.groupSize.limit,
+			GroupBy:        eb0.groupBy,
+			Interval:       eb0.interval,
+			Filter:         eb0.filter,
+			Labels:         eb0.labels,
+			GroupLimit:     eb0.groupSize.limit,
+			MinCardinality: e.minCardinality,
 		}
 		if dropped > 0 {
 			if err := s.writeDroppedMetric(w, dropped); err != nil {

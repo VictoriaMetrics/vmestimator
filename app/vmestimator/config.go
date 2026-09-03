@@ -27,6 +27,11 @@ type EstimatorConfig struct {
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`
+
+	// MinCardinality, when non-nil, overrides the global
+	// -cardinalityMetrics.minCardinality flag for this stream only.
+	// When nil, the global flag value is used.
+	MinCardinality *uint64 `yaml:"min_cardinality"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {
