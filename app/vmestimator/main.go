@@ -90,7 +90,6 @@ func main() {
 			writeCardinalityMetrics(w, es, *storageNodes)
 			return true
 		}
-
 		path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
 		switch path {
 		case "/api/v1/write":
