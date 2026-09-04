@@ -365,18 +365,6 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	return cb(s)
 }
 
-// estimate returns the current unique-series count by merging all bucket sketches.
-func (e *estimator) estimate() uint64 {
-	eb0 := e.buckets[0]
-	resSK := eb0.newSketch()
-	for _, eb := range e.buckets {
-		eb.mu.Lock()
-		eb.mergeSketches(eb.sketch, eb.prevSketch, resSK)
-		eb.mu.Unlock()
-	}
-	return resSK.Estimate()
-}
-
 func (e *estimator) writeMetrics(w io.Writer) {
 	var dropped uint64
 	if err := e.toSnapshot(func(s *snapshot) error {

@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): simplify overflow handling in the deduplicator. Expose `vmestimator_deduplication_passed_total`, `vmestimator_deduplication_dropped_total`, `vmestimator_deduplication_bloom_filter_size`, and `vmestimator_deduplication_bloom_filter_max_size` metrics for monitoring deduplication effectiveness. See [#48](https://github.com/VictoriaMetrics/vmestimator/pull/48).
+
 ## [v0.1.15](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.15)
 
 Released at 2026-08-17
