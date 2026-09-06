@@ -119,11 +119,19 @@ streams:
     # Increases are always reflected immediately. Interval only controls how fast the estimate
     # drops after previously seen series disappear.
     #
-    # Running two streams with different intervals (e.g. 5m and 1h) lets you derive churn rate
-    # by comparing their estimates. See Use Cases -> Churn Rate
-    #
     # default: 5m
     interval: <duration>
+
+    # Optional. When set, vmestimator emits a cardinality_churn_ratio metric measuring
+    # how quickly the series set changes within the measurement window.
+    # The look-back comparison window: vmestimator retains a snapshot of the HLL sketch
+    # and replaces it every churn_interval. The churn ratio in [0, 1] is computed as the
+    # Jaccard distance between the current sketch and the retained snapshot.
+    # A ratio of 0 means the series set is completely stable; 1 means completely replaced.
+    # Must not exceed interval.
+    #
+    # default: 0 (churn ratio metric is not emitted)
+    churn_interval: <duration>
 
     # Optional. MetricsQL label selector used to pre-filter time series before counting.
     # Only series matching all matchers are counted. Supports equality (=), negative equality (!=),
@@ -318,42 +326,23 @@ Can be narrowed to a specific job: `['job', '__label__']`.
 [High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
 This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
 
-To measure churn, configure two streams with the same `group_by` but different intervals. A short one (`15m`) and a long one (`30m`):
+To measure churn, add `churn_interval` to a stream:
 
 ```yaml
 # streams.yaml
 
 - interval: '15m'
-  group_by: ['job']
-
-- interval: '30m'
+  churn_interval: '15m'
   group_by: ['job']
 ```
 
-When churn is low, both estimates are roughly equal.
-When churn is high, the `30m` estimate grows significantly larger than the `15m` estimate, because the long window accumulates series that have already disappeared.
-
-The following query computes the churn ratio per job:
+vmestimator will emit a `cardinality_churn_ratio` metric per group. The value is in `[0, 1]`:
+- `0` — the series set is completely stable; the same series were active across both windows.
+- `1` — complete churn; entirely different series appeared in the latest window.
 
 ```
-(
-    sum(
-        max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
-    ) by (group_by_keys,group_by_values)
-    -
-    sum(
-        max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
-    ) by (group_by_keys,group_by_values)
-)
-/
-sum(
-    max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
-) by (group_by_keys,group_by_values) * 100
+cardinality_churn_ratio{interval="15m0s",churn_interval="15m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.1200
 ```
-
-A result near `0` means the series set is stable. The same series were active throughout the entire hour.
-A result near `1` means complete churn. Entirely different series appeared each 5-minute window.
-Values in between indicate the fraction of maximum possible churn that is occurring.
 
 This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
 
@@ -362,7 +351,7 @@ This helps identify jobs that create the most indexing pressure on storage, even
 Pre-built alert rules for cardinality monitoring are available in
 [deployment/docker/rules/alerts-cardinality.yml](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/rules/alerts-cardinality.yml).
 
-They require two streams with the same `group_by` but different intervals to also support churn detection:
+They require the following stream configuration to also support churn detection:
 
 ```yaml
 # streams.yaml
@@ -370,18 +359,16 @@ They require two streams with the same `group_by` but different intervals to als
 # https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml
 
 - interval: '15m'
-  group_by: ['job']
-
-- interval: '30m'
+  churn_interval: '15m'
   group_by: ['job']
 ```
 
 The included alerts are:
 
-- **JobTooHighCardinality** — fires when any job exceeds 20,000 estimated active series over the last 30 minutes.
+- **JobTooHighCardinality** — fires when any job exceeds 20,000 estimated active series over the last 15 minutes.
   The threshold is a starting point and should be calibrated to reflect the expected cardinality of your largest jobs.
 
-- **JobTooHighChurnRate** — fires when more than 10% of a job's series churned between the 15m and 30m windows.
+- **JobTooHighChurnRate** — fires when more than 20% of a job's series churned in the last `churn_interval` window.
   Catches jobs that generate continuous indexing pressure even when their active series count looks moderate.
 
 - **CardinalityGroupLimitNearlyReached** — fires when the number of tracked groups exceeds 80% of the configured `group_limit`.

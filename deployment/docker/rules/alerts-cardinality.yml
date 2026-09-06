@@ -5,10 +5,10 @@ groups:
   - name: 'cardinality.recording'
     rules:
       - record: 'cardinality_estimate:weekly_avg'
-        expr: 'avg_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
+        expr: 'avg_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="15m0s"}) without(instance))[1w:5m])'
 
       - record: 'cardinality_estimate:weekly_stddev'
-        expr: 'stddev_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="30m0s"}) without(instance))[1w:5m])'
+        expr: 'stddev_over_time((max(cardinality_estimate{group_by_keys=~"__global__|job",interval="15m0s"}) without(instance))[1w:5m])'
 
   - name: 'cardinality'
     rules:
@@ -16,30 +16,12 @@ groups:
       # See https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/deployment/docker/rules/alerts-single-node.yml#L88
       - alert: 'GlobalChurnTooHigh'
         expr: |
-          # Detects short-lived series: series present in 30m window but absent in 15m window.
-          # Higher values indicate more short-lived or disappearing series.
-          (
-              max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"}) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without (instance) * 100 > 10
-          OR
-          # Detects cardinality growth: compares current 15m estimate to the same
-          # estimate 15 minutes ago.
-          (
-              max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"} offset 15m) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"}) without (instance) * 100 > 10
+          max(max_over_time(cardinality_churn_ratio{group_by_keys="__global__"}[5m])) without (instance) * 100 > 10
         for: '15m'
         labels:
           severity: 'warning'
         annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5g9/?var-churn_short=15m0s&var-churn_long=30m0s&viewPanel=panel-7&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
+          dashboard: "{{ $externalURL }}/d/mktd5g9/?viewPanel=panel-7&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
           summary: "Global churn rate is more than 10%"
           description: |
             Global series churn rate is {{ printf "%.0f%%" ($value) }}, exceeding the 10% threshold.
@@ -48,30 +30,12 @@ groups:
 
       - alert: 'JobChurnTooHigh'
         expr: |
-          # Detects short-lived series: series present in 30m window but absent in 15m window.
-          # Higher values indicate more short-lived or disappearing series.
-          (
-              max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without (instance) * 100 > 20
-          OR
-          # Detects cardinality growth: compares current 15m estimate to the same
-          # estimate 15 minutes ago.
-          (
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance)
-              -
-              max(cardinality_estimate{group_by_keys="job",interval="15m0s"} offset 15m) without (instance)
-          )
-          /
-          max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without (instance) * 100 > 20
+          max(max_over_time(cardinality_churn_ratio{group_by_keys="job"}[5m])) without (instance) * 100 > 20
         for: '30m'
         labels:
           severity: 'warning'
         annotations:
-          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&var-churn_short=15m0s&var-churn_long=30m0s&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
+          dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
           summary: "High churn rate for job {{ $labels.group_by_values }}"
           description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
 
@@ -81,24 +45,24 @@ groups:
           # mean by more than 3 standard deviations, using the recording rules computed
           # in the cardinality.recording group above.
           (
-            max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without(instance)
+            max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"}) without(instance)
             >
             (
-              cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"}
-              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="__global__",interval="30m0s"}
+              cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="15m0s"}
+              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="__global__",interval="15m0s"}
             )
           )
           # Floor condition: ensures the threshold is never too close to the mean — for a perfectly
           # stable baseline where stddev=0, require at least 20% growth before firing.
           AND (
-            max(cardinality_estimate{group_by_keys="__global__",interval="30m0s"}) without(instance)
+            max(cardinality_estimate{group_by_keys="__global__",interval="15m0s"}) without(instance)
             >
-            cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"} * 1.2
+            cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="15m0s"} * 1.2
           )
           # Guard: skip when the global historical baseline is too small for 3-sigma to be
           # meaningful — a database with avg 10k series hitting 13k is noise, not an incident.
           # Adjust the threshold to match the typical scale of your environment.
-          AND cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="30m0s"} > 100000
+          AND cardinality_estimate:weekly_avg{group_by_keys="__global__",interval="15m0s"} > 100000
         for: '30m'
         labels:
           severity: 'warning'
@@ -117,23 +81,23 @@ groups:
           # mean by more than 3 standard deviations, using the recording rules computed
           # in the cardinality.recording group above.
           (
-            max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance)
+            max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without(instance)
             >
             (
-              cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"}
-              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="job",interval="30m0s"}
+              cardinality_estimate:weekly_avg{group_by_keys="job",interval="15m0s"}
+              + 3 * cardinality_estimate:weekly_stddev{group_by_keys="job",interval="15m0s"}
             )
           )
           AND
           (
-            max(cardinality_estimate{group_by_keys="job",interval="30m0s"}) without(instance)
+            max(cardinality_estimate{group_by_keys="job",interval="15m0s"}) without(instance)
             >
-            cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"} * 1.2
+            cardinality_estimate:weekly_avg{group_by_keys="job",interval="15m0s"} * 1.2
           )
           # Guard: skip jobs whose historical baseline is too small for 3-sigma to be
           # meaningful — a job with avg 5 series hitting 10 is noise, not an incident.
           # Adjust the threshold to match the typical scale of your environment.
-          AND cardinality_estimate:weekly_avg{group_by_keys="job",interval="30m0s"} > 10000
+          AND cardinality_estimate:weekly_avg{group_by_keys="job",interval="15m0s"} > 10000
         for: '30m'
         labels:
           severity: 'warning'

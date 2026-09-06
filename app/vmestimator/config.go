@@ -23,7 +23,8 @@ type EstimatorConfig struct {
 	GroupBy      []string          `yaml:"group_by"`
 	GroupLimit   int               `yaml:"group_limit"`
 	Labels       map[string]string `yaml:"labels"`
-	Interval     time.Duration     `yaml:"interval"`
+	Interval      time.Duration `yaml:"interval"`
+	ChurnInterval time.Duration `yaml:"churn_interval"`
 	Buckets      int               `yaml:"buckets"`
 	HLLPrecision uint8             `yaml:"hll_precision"`
 	HLLSparse    *bool             `yaml:"hll_sparse"`

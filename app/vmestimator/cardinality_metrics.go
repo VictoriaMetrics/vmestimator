@@ -13,6 +13,8 @@ import (
 	"github.com/VictoriaMetrics/metrics"
 )
 
+var globalChurnSnapshots = newChurnSnapshots()
+
 var (
 	cardinalityMetricsWrites        = metrics.NewCounter(`vmestimator_write_cardinality_metrics_total`)
 	cardinalityMetricsWriteDuration = metrics.NewFloatCounter(`vmestimator_write_cardinality_metrics_duration_seconds_total`)
@@ -36,11 +38,39 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 
 	cardinalityCacheMu.Lock()
 	if time.Since(cardinalityMetricsCacheAt) >= *cardinalityMetricsCacheTTL || *cardinalityMetricsCacheTTL == 0 {
+		now := time.Now()
 		plain := bytes.NewBuffer(cardinalityMetricsCache[:0])
 		for _, e := range es {
-			e.writeMetrics(plain)
+			var dropped uint64
+			if err := e.toSnapshot(func(s *snapshot) error {
+				if s.ChurnInterval > 0 {
+					globalChurnSnapshots.update(s, now)
+				}
+				d, err := s.writeCardinalityEstimates(plain)
+				dropped += d
+				return err
+			}); err != nil {
+				logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+			}
+			if len(e.groupBy) > 0 {
+				eb0 := e.buckets[0]
+				s := &snapshot{
+					GroupBy:    eb0.groupBy,
+					Interval:   eb0.interval,
+					Filter:     eb0.filter,
+					Labels:     eb0.labels,
+					GroupLimit: eb0.groupSize.limit,
+				}
+				if dropped > 0 {
+					if err := s.writeDroppedMetric(plain, dropped); err != nil {
+						logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+					}
+				}
+				if err := s.writeGroupSizeAndLimit(plain, eb0.groupSize.totalSize()); err != nil {
+					logger.Errorf("writing metrics failed: %s; written cardinality metrics might be incomplete or invalid", err)
+				}
+			}
 		}
-
 		if len(storageNodeURLs) > 0 {
 			ss := newSnapshots()
 			var wg sync.WaitGroup
@@ -55,9 +85,18 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 			}
 			wg.Wait()
 
+			for _, s := range ss.m {
+				if s.ChurnInterval > 0 {
+					globalChurnSnapshots.update(s, now)
+				}
+			}
+
 			if err := ss.writeMetrics(plain); err != nil {
 				logger.Errorf("write cardinality metrics: %s", err)
 			}
+		}
+		if err := globalChurnSnapshots.writeMetrics(plain); err != nil {
+			logger.Errorf("write churn metrics: %s", err)
 		}
 
 		cardinalityMetricsCache = plain.Bytes()

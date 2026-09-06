@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `churn_interval` stream config option. When set, vmestimator emits `cardinality_churn_ratio` metrics measuring how quickly the series set changes within the measurement window. The value is in `[0, 1]`, where `0` means a stable series set and `1` means complete churn. See [churn-calculation](https://docs.victoriametrics.com/victoriametrics/vmestimator/#churn-calculation) and [#24](https://github.com/VictoriaMetrics/vmestimator/issues/24).
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): simplify overflow handling in the deduplicator. Expose `vmestimator_deduplication_passed_total`, `vmestimator_deduplication_dropped_total`, `vmestimator_deduplication_bloom_filter_size`, and `vmestimator_deduplication_bloom_filter_max_size` metrics for monitoring deduplication effectiveness. See [#48](https://github.com/VictoriaMetrics/vmestimator/pull/48).
 
 ## [v0.1.15](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.15)
