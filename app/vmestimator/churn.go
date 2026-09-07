@@ -80,11 +80,9 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 		}
 
 		if e.curr == nil {
-			// First update: create an empty prev so rotation logic works normally,
-			// but churnRatio will report 0 until prev has real data.
-			empty := ssk.Sketch.Clone()
-			empty.Reset()
-			e.prev = &churnSketch{addedAt: now, sketch: empty}
+			// First update: set prev with a nil sketch so the rotation clock starts
+			// now, but churnRatio returns 0 until the first real rotation.
+			e.prev = &churnSketch{addedAt: now, sketch: nil}
 			e.curr = newSK
 		} else if e.prev.addedAt.Before(now.Add(-s.ChurnInterval)) {
 			e.prev = &churnSketch{addedAt: now, sketch: e.curr.sketch}
@@ -132,13 +130,13 @@ func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
 }
 
 // churnRatio computes the churn rate for a churnEntry.
-// Returns 0 when prev has no data yet.
+// Returns 0 when prev.sketch is nil (synthetic first-update baseline).
 func churnRatio(e *churnEntry) float64 {
-	psk := e.prev.sketch
-	csk := e.curr.sketch
-	if psk.Estimate() == 0 {
+	if e.prev.sketch == nil {
 		return 0
 	}
+	psk := e.prev.sketch
+	csk := e.curr.sketch
 	union := csk.Clone()
 	if err := union.Merge(psk); err != nil {
 		return 0

@@ -235,6 +235,28 @@ cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by
 	})
 }
 
+// --- real empty prev ---
+
+func TestChurnSnapshots_Global_EmptyPrevWindow_HundredPercentChurn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cs := newChurnSnapshots()
+		interval := time.Minute
+
+		// First update: empty sketch — no series in the initial window.
+		cs.update(newGlobalChurnSnapshot(interval), time.Now())
+		time.Sleep(interval + time.Second)
+
+		// Rotation: prev = empty (real, not synthetic). Curr gets new series.
+		cs.update(newGlobalChurnSnapshot(interval, "s1", "s2", "s3"), time.Now())
+
+		assertChurnMetrics(
+			t,
+			writeChurnMetrics(t, cs),
+			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="__global__"} 1.0000`,
+		)
+	})
+}
+
 // --- cleanup ---
 
 func TestChurnSnapshots_Cleanup(t *testing.T) {
