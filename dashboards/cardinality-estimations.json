@@ -186,10 +186,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -608,10 +604,6 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -682,10 +674,10 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "monitoring-vmestimator"
+            "All"
           ],
           "value": [
-            "monitoring-vmestimator"
+            "$__all"
           ]
         },
         "datasource": {
@@ -765,8 +757,8 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": "job",
-          "value": "job"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
@@ -790,10 +782,10 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "monitoring-vmsingle"
+            "All"
           ],
           "value": [
-            "monitoring-vmsingle"
+            "$__all"
           ]
         },
         "datasource": {
@@ -817,12 +809,12 @@
     ]
   },
   "time": {
-    "from": "now-12h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "VictoriaMetrics - Cardinality Estimations",
-  "uid": "mktd5g9",
-  "version": 3
+  "uid": "mktd5g9_tmp",
+  "version": 5
 }
