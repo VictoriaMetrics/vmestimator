@@ -359,6 +359,11 @@ They require the following stream configuration to also support churn detection:
 # or use example config:
 # https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml
 
+# Global stream — required for GlobalChurnTooHigh and GlobalCardinalityTooHigh.
+- interval: '15m'
+  churn_interval: '15m'
+
+# Per-job stream — required for JobChurnTooHigh and JobCardinalityTooHigh.
 - interval: '15m'
   churn_interval: '15m'
   group_by: ['job']
