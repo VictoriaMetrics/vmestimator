@@ -81,7 +81,7 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 
 		if e.curr == nil {
 			// First update: create an empty prev so rotation logic works normally,
-			// but churnRate will report 0 until prev has real data.
+			// but churnRatio will report 0 until prev has real data.
 			empty := ssk.Sketch.Clone()
 			empty.Reset()
 			e.prev = &churnSketch{addedAt: now, sketch: empty}
@@ -104,7 +104,7 @@ func (cs *churnSnapshots) cleanup(now time.Time) {
 	}
 }
 
-// writeMetrics writes cardinality_churn_rate metrics for all entries.
+// writeMetrics writes cardinality_churn_ratio metrics for all entries.
 // Churn rate is in [0, 1]. Reports 0 when prev has no data yet.
 func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
 	buf := make([]byte, 0, 256)
@@ -112,7 +112,7 @@ func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
 		metricPrefixB := appendChurnMetricPrefix(make([]byte, 0, 128), e.labels, e.interval, e.churnInterval, e.filter)
 		metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
-		rate := churnRate(e)
+		rate := churnRatio(e)
 		buf = buf[:0]
 		if len(e.groupBy) == 0 {
 			buf = append(buf, metricPrefix...)
@@ -131,9 +131,9 @@ func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
 	return nil
 }
 
-// churnRate computes the churn rate for a churnEntry.
+// churnRatio computes the churn rate for a churnEntry.
 // Returns 0 when prev has no data yet.
-func churnRate(e *churnEntry) float64 {
+func churnRatio(e *churnEntry) float64 {
 	psk := e.prev.sketch
 	csk := e.curr.sketch
 	if psk.Estimate() == 0 {

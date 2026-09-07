@@ -22,9 +22,9 @@ groups:
           severity: 'warning'
         annotations:
           dashboard: "{{ $externalURL }}/d/mktd5g9/?viewPanel=panel-7&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
-          summary: "Global churn rate is more than 10%"
+          summary: "Global churn is more than 10%"
           description: |
-            Global series churn rate is {{ printf "%.0f%%" ($value) }}, exceeding the 10% threshold.
+            Global series churn is {{ printf "%.0f%%" ($value) }}, exceeding the 10% threshold.
             High Churn Rate is tightly connected with database performance and may result in unexpected OOM's or slow queries.
             To investigate, check job or __name__ or other available cardinality estimates, or use the VM cardinality explorer.
 
@@ -36,8 +36,8 @@ groups:
           severity: 'warning'
         annotations:
           dashboard: "{{ $externalURL }}/d/mktd5g9?var-group_by_keys=job&from={{($activeAt.Add (parseDurationTime \"-1h\")).UnixMilli}}&to={{($activeAt.Add (parseDurationTime \"1h\")).UnixMilli}}"
-          summary: "High churn rate for job {{ $labels.group_by_values }}"
-          description: 'Job {{ $labels.group_by_values }} has high series churn rate of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
+          summary: "High churn for job {{ $labels.group_by_values }}"
+          description: 'Job {{ $labels.group_by_values }} has high series churn of {{ printf "%.0f%%" $value }}, exceeding the 20% threshold.'
 
       - alert: 'GlobalCardinalityTooHigh'
         expr: |
