@@ -366,11 +366,18 @@ They require the following stream configuration to also support churn detection:
 
 The included alerts are:
 
-- **JobTooHighCardinality** — fires when any job exceeds 20,000 estimated active series over the last 15 minutes.
-  The threshold is a starting point and should be calibrated to reflect the expected cardinality of your largest jobs.
+- **GlobalChurnTooHigh** — fires when global series churn exceeds 10% for 15 minutes.
+  High global churn can cause unexpected OOM or slow queries across the whole database.
 
-- **JobTooHighChurnRate** — fires when more than 20% of a job's series churned in the last `churn_interval` window.
+- **JobChurnTooHigh** — fires when more than 20% of a job's series churned for 30 minutes.
   Catches jobs that generate continuous indexing pressure even when their active series count looks moderate.
+
+- **GlobalCardinalityTooHigh** — fires when global cardinality exceeds the weekly mean by more than 3 standard deviations
+  and has grown at least 20% above that mean, sustained for 30 minutes. The guard baseline is 100,000 series.
+
+- **JobCardinalityTooHigh** — fires when a job's cardinality exceeds its weekly mean by more than 3 standard deviations
+  and has grown at least 20% above that mean, sustained for 30 minutes. The guard baseline is 10,000 series per job.
+  Uses 3-sigma anomaly detection rather than a fixed threshold, so it adapts to the expected scale of each job.
 
 - **CardinalityGroupLimitNearlyReached** — fires when the number of tracked groups exceeds 80% of the configured `group_limit`.
   Acts as an early warning that some label value combinations may soon be dropped from individual tracking.
