@@ -235,6 +235,32 @@ cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by
 	})
 }
 
+// --- cleanup ---
+
+func TestChurnSnapshots_Cleanup(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cs := newChurnSnapshots()
+		interval := time.Minute
+		expMetric := `cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="__global__"} 0.0000`
+
+		cs.update(newGlobalChurnSnapshot(interval, "s1", "s2"), time.Now())
+
+		// Metric present at start.
+		cs.cleanup(time.Now())
+		assertChurnMetrics(t, writeChurnMetrics(t, cs), expMetric)
+
+		// Metric present just before 2*interval.
+		time.Sleep(2*interval - time.Millisecond)
+		cs.cleanup(time.Now())
+		assertChurnMetrics(t, writeChurnMetrics(t, cs), expMetric)
+
+		// Metric disappears just after 2*interval.
+		time.Sleep(2 * time.Millisecond)
+		cs.cleanup(time.Now())
+		assertChurnMetrics(t, writeChurnMetrics(t, cs), "")
+	})
+}
+
 // --- global ---
 
 func TestChurnSnapshots_Global(t *testing.T) {

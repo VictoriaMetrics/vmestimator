@@ -96,6 +96,7 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 				logger.Errorf("write cardinality metrics: %s", err)
 			}
 		}
+		globalChurnSnapshots.cleanup(now)
 		if err := globalChurnSnapshots.writeMetrics(plain); err != nil {
 			logger.Errorf("write churn metrics: %s", err)
 		}

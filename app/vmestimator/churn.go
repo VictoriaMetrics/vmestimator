@@ -95,6 +95,15 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 	}
 }
 
+// cleanup removes entries whose curr sketch has not been updated within their 2*interval.
+func (cs *churnSnapshots) cleanup(now time.Time) {
+	for k, e := range cs.entries {
+		if e.curr.addedAt.Before(now.Add(-e.interval * 2)) {
+			delete(cs.entries, k)
+		}
+	}
+}
+
 // writeMetrics writes cardinality_churn_rate metrics for all entries.
 // Churn rate is in [0, 1]. Reports 0 when prev has no data yet.
 func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
