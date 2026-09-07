@@ -72,6 +72,7 @@ func loadConfig(path string) ([]*estimator, error) {
 
 	reservedLabels := map[string]bool{
 		"interval":        true,
+		"churn_interval":  true,
 		"filter":          true,
 		"group_by_keys":   true,
 		"group_by_values": true,
