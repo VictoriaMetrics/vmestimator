@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -56,6 +57,7 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 		}
 		if len(storageNodeURLs) > 0 {
 			ss := newSnapshots()
+			var fetchFailed atomic.Bool
 			var wg sync.WaitGroup
 			for _, nodeURL := range storageNodeURLs {
 				wg.Add(1)
@@ -63,14 +65,19 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 					defer wg.Done()
 					if err := fetchAndMergeSnapshots(url, ss.add); err != nil {
 						logger.Errorf("fetch snapshots from %s: %s", url, err)
+						fetchFailed.Store(true)
 					}
 				}(nodeURL)
 			}
 			wg.Wait()
 
-			for _, s := range ss.m {
-				if s.ChurnInterval > 0 {
-					globalChurnSnapshots.update(s, now)
+			// Update churn only when all nodes responded; a partial union would
+			// compare a full-cluster sketch against an incomplete one next scrape.
+			if !fetchFailed.Load() {
+				for _, s := range ss.m {
+					if s.ChurnInterval > 0 {
+						globalChurnSnapshots.update(s, now)
+					}
 				}
 			}
 
