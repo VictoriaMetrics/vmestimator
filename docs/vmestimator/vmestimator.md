@@ -125,8 +125,9 @@ streams:
     # Optional. When set, vmestimator emits a cardinality_churn_ratio metric measuring
     # how quickly the series set changes within the measurement window.
     # The look-back comparison window: vmestimator retains a snapshot of the HLL sketch
-    # and replaces it every churn_interval. The churn ratio in [0, 1] is computed as the
-    # Jaccard distance between the current sketch and the retained snapshot.
+    # and replaces it every churn_interval. The churn ratio in [0, 1] is computed as:
+    #   (2*|A∪B| - |A| - |B|) / |A∪B|
+    # where A is the retained snapshot and B is the current sketch.
     # A ratio of 0 means the series set is completely stable; 1 means completely replaced.
     # Must not exceed interval.
     #

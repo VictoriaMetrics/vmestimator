@@ -19,15 +19,15 @@ type Config struct {
 }
 
 type EstimatorConfig struct {
-	Filter       string            `yaml:"filter"`
-	GroupBy      []string          `yaml:"group_by"`
-	GroupLimit   int               `yaml:"group_limit"`
-	Labels       map[string]string `yaml:"labels"`
-	Interval      time.Duration `yaml:"interval"`
-	ChurnInterval time.Duration `yaml:"churn_interval"`
-	Buckets      int               `yaml:"buckets"`
-	HLLPrecision uint8             `yaml:"hll_precision"`
-	HLLSparse    *bool             `yaml:"hll_sparse"`
+	Filter        string            `yaml:"filter"`
+	GroupBy       []string          `yaml:"group_by"`
+	GroupLimit    int               `yaml:"group_limit"`
+	Labels        map[string]string `yaml:"labels"`
+	Interval      time.Duration     `yaml:"interval"`
+	ChurnInterval time.Duration     `yaml:"churn_interval"`
+	Buckets       int               `yaml:"buckets"`
+	HLLPrecision  uint8             `yaml:"hll_precision"`
+	HLLSparse     *bool             `yaml:"hll_sparse"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {

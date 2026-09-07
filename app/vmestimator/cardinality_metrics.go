@@ -13,6 +13,7 @@ import (
 	"github.com/VictoriaMetrics/metrics"
 )
 
+// globalChurnSnapshots must be accessed only under cardinalityCacheMu.
 var globalChurnSnapshots = newChurnSnapshots()
 
 var (

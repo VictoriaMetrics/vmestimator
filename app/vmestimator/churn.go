@@ -5,7 +5,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/bytesutil"
@@ -28,7 +27,7 @@ type churnEntry struct {
 	values        []string // group label values for this groupKey
 
 	prev *churnSketch
-	curr   *churnSketch
+	curr *churnSketch
 }
 
 type churnSketch struct {
@@ -38,9 +37,7 @@ type churnSketch struct {
 
 // churnSnapshots holds prev and curr sketch baselines per (snapshotKey, groupKey).
 // When prev.addedAt < now-churnInterval, prev is reset to curr.
-// Must be accessed under its own mu lock.
 type churnSnapshots struct {
-	mu      sync.Mutex
 	entries map[churnKey]*churnEntry
 }
 
@@ -51,9 +48,6 @@ func newChurnSnapshots() *churnSnapshots {
 // update accepts a single snapshot and upserts one churnEntry per group sketch.
 // Panics if s.ChurnInterval is zero.
 func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
 	if s.ChurnInterval == 0 {
 		logger.Panicf("BUG: update called with snapshot with zero ChurnInterval")
 	}
@@ -104,9 +98,6 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 // writeMetrics writes cardinality_churn_rate metrics for all entries.
 // Churn rate is in [0, 1]. Reports 0 when prev has no data yet.
 func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
 	buf := make([]byte, 0, 256)
 	for _, e := range cs.entries {
 		metricPrefixB := appendChurnMetricPrefix(make([]byte, 0, 128), e.labels, e.interval, e.churnInterval, e.filter)
