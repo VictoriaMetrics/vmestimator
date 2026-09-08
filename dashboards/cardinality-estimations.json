@@ -18,7 +18,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 0,
   "links": [],
   "panels": [
     {
@@ -29,9 +28,291 @@
         "x": 0,
         "y": 0
       },
+      "id": 17,
+      "panels": [],
+      "title": "Trend",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Point-in-time cardinality snapshot: current value versus 1 week, 1 month, and 3 months ago. Useful for spotting long-term growth that isn't visible in a short dashboard time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Now"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 week ago"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 month ago"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3 months ago"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 16,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(max(cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"})[5m:])",
+          "instant": true,
+          "legendFormat": "Now",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(max(cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"})[5m:] offset 1w)",
+          "instant": true,
+          "legendFormat": "1 week ago",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(max(cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"})[5m:] offset 4w)",
+          "instant": true,
+          "legendFormat": "1 month ago",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "last_over_time(max(cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"})[5m:] offset 13w)",
+          "instant": true,
+          "legendFormat": "3 months ago",
+          "refId": "D"
+        }
+      ],
+      "title": "Now vs 1w / 1m / 3m ago",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Long-term cardinality trend. Panel time is fixed to last 90 days regardless of the dashboard time picker.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 18,
+        "x": 6,
+        "y": 1
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"}\n)",
+          "legendFormat": "Global Cardinality",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "90d",
+      "title": "Global Cardinality — 90d Trend",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
       "id": 4,
       "panels": [],
-      "title": "Summary",
+      "title": "Global",
       "type": "row"
     },
     {
@@ -97,10 +378,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
-        "w": 12,
+        "h": 10,
+        "w": 24,
         "x": 0,
-        "y": 1
+        "y": 12
       },
       "id": 1,
       "options": {
@@ -110,7 +391,7 @@
           ],
           "displayMode": "table",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -118,7 +399,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -126,8 +407,8 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "sum(\n    max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",group_by_keys=~\"__global__\",interval=~\"$interval\"}) without(instance)\n) by (interval)\n\n",
-          "legendFormat": "{{interval}}",
+          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"}\n)\n",
+          "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
@@ -140,6 +421,106 @@
         "type": "prometheus",
         "uid": "${ds}"
       },
+      "description": "Shows global churn as a percentage of global cardinality.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max(\n        max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[3m])\n) by (job)",
+          "legendFormat": "Global Churn %",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Global Churn %",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Shows global churn as the absolute value of global cardinality.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -189,17 +570,17 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 22
       },
-      "id": 7,
+      "id": 12,
       "options": {
         "legend": {
           "calcs": [
@@ -207,7 +588,7 @@
           ],
           "displayMode": "table",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -215,7 +596,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -223,8 +604,8 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "max(max_over_time(cardinality_churn_ratio{\n        job=~\"$job\",\n        instance=~\"$instance\",\n        group_by_keys=\"__global__\",\n}[3m])) without (instance, churn_interval)",
-          "legendFormat": "{{interval}}",
+          "expr": "max(cardinality_estimate{job=~\"$job\",group_by_keys=\"__global__\"}) by (job)\n*\nmax(\n        max_over_time(cardinality_churn_ratio{job=~\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[15s])\n) by (job) ",
+          "legendFormat": "{{job}}",
           "range": true,
           "refId": "A"
         }
@@ -302,15 +683,13 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 31
       },
       "id": 6,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -320,7 +699,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -328,13 +707,13 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"__group__\",group_by_values=~\"$group_by_keys\"}) without (instance)\n/\nmax(vmestimator_estimator_group_limit{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_values=~\"$group_by_keys\"}) without(instance)",
-          "legendFormat": "{{group_by_values}} ({{interval}})",
+          "expr": "max(cardinality_estimate{job=\"$job\",interval=~\"$interval\",group_by_keys=~\"__group__\",group_by_values=~\"$group_by_keys\"}) by (group_by_values)\n/\nmax(vmestimator_estimator_group_limit{job=\"$job\",interval=~\"$interval\",group_by_values=~\"$group_by_keys\"}) by (group_by_values)",
+          "legendFormat": "{{group_by_values}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Group Keys Cardinality Limit Usage %",
+      "title": "Group Keys Cardinality %",
       "type": "timeseries"
     },
     {
@@ -403,15 +782,13 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 31
       },
       "id": 3,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -421,7 +798,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -429,8 +806,8 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "sum(\n    max(cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"__group__\"}) without (instance)\n) by (interval,group_by_values)",
-          "legendFormat": "{{group_by_values}} ({{interval}})",
+          "expr": "max(cardinality_estimate{job=\"$job\",interval=~\"$interval\",group_by_keys=~\"__group__\"}) by (group_by_values)",
+          "legendFormat": "{{group_by_values}}",
           "range": true,
           "refId": "A"
         }
@@ -444,7 +821,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 41
       },
       "id": 5,
       "panels": [],
@@ -516,17 +893,15 @@
       },
       "gridPos": {
         "h": 12,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 23
+        "y": 42
       },
       "id": 2,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -536,7 +911,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -544,13 +919,110 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "topk(\n    10, \n    sum(\n        max(\n            cardinality_estimate{job=~\"$job\",instance=~\"$instance\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}) without (instance)\n    ) by (group_by_values,interval)\n)",
-          "legendFormat": "{{group_by_values}} ({{interval}})",
+          "expr": "topk(\n    10, \n    max(\n        cardinality_estimate{job=\"$job\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values!~\"by_.+\",group_by_values=~\"$group_by_values\"}\n    ) by (group_by_values)\n)",
+          "legendFormat": "{{group_by_values}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": " Top 10 Cardinality of $group_by_keys",
+      "title": "\"$group_by_keys\" Top 10 Cardinality",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "topk(\n    10,\n    max(max_over_time(cardinality_churn_ratio{\n            job=\"$job\",\n            group_by_keys=~\"$group_by_keys\",\n            group_by_keys!=\"__global__\",\n            group_by_keys!=\"__group__\",\n            group_by_values=~\"$group_by_values\"\n    }[15s])) by (job,group_by_values)\n)",
+          "legendFormat": "{{group_by_values}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "\"$group_by_keys\" Top 10 Churn %",
       "type": "timeseries"
     },
     {
@@ -607,23 +1079,21 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 12,
+        "h": 10,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 54
       },
-      "id": 8,
+      "id": 13,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
+          "calcs": [],
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -633,7 +1103,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "12.2.10",
+      "pluginVersion": "12.4.3",
       "targets": [
         {
           "datasource": {
@@ -641,14 +1111,27 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "topk(\n    10,\n    max(max_over_time(cardinality_churn_ratio{\n            job=~\"$job\",\n            instance=~\"$instance\",\n            group_by_keys=~\"$group_by_keys\",\n            group_by_keys!=\"__global__\",\n            group_by_keys!=\"__group__\",\n            group_by_values=~\"$group_by_values\"\n    }[15s])) without (instance, churn_interval)\n)",
-          "legendFormat": "{{interval}}",
+          "expr": "topk(\n    10,\n    max(\n        cardinality_estimate{job=\"$job\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values=~\"$group_by_values\"}\n    ) by (job, group_by_values)\n    *\n    max (\n        max_over_time(cardinality_churn_ratio{job=\"$job\",interval=~\"$interval\",group_by_keys=~\"$group_by_keys\",group_by_keys!=\"__global__\",group_by_keys!=\"__group__\",group_by_values!~\"by_.+\",group_by_values=~\"$group_by_values\"}[5m])\n    ) by (job, group_by_values)\n)",
+          "legendFormat": "{{group_by_values}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Top 10 Churn",
+      "title": "\"$group_by_keys\" Top 10 Churn",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 110
+      },
+      "id": 14,
+      "panels": [],
+      "title": "Cardinality Trend",
+      "type": "row"
     }
   ],
   "preload": false,
@@ -660,7 +1143,7 @@
       {
         "current": {
           "text": "prometheus",
-          "value": "P1809F7CD0C75ACF3"
+          "value": "prometheus"
         },
         "name": "ds",
         "options": [],
@@ -673,20 +1156,15 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "text": "",
+          "value": ""
         },
         "datasource": {
           "type": "prometheus",
           "uid": "${ds}"
         },
         "definition": "label_values(cardinality_estimate,job)",
-        "includeAll": true,
-        "multi": true,
+        "includeAll": false,
         "name": "job",
         "options": [],
         "query": {
@@ -696,6 +1174,32 @@
         },
         "refresh": 1,
         "regex": "",
+        "regexApplyTo": "value",
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "allowCustomValue": false,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds}"
+        },
+        "definition": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys!=\"__global__\", group_by_keys!=\"__group__\"},group_by_keys)",
+        "includeAll": true,
+        "name": "group_by_keys",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys!=\"__global__\", group_by_keys!=\"__group__\"},group_by_keys)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "regexApplyTo": "value",
         "type": "query"
       },
       {
@@ -711,19 +1215,19 @@
           "type": "prometheus",
           "uid": "${ds}"
         },
-        "definition": "label_values(cardinality_estimate{job=~\"$job\"},instance)",
-        "description": "",
+        "definition": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys=~\"$group_by_keys\"},group_by_values)",
         "includeAll": true,
         "multi": true,
-        "name": "instance",
+        "name": "group_by_values",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(cardinality_estimate{job=~\"$job\"},instance)",
+          "query": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys=~\"$group_by_keys\"},group_by_values)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
+        "regexApplyTo": "value",
         "type": "query"
       },
       {
@@ -751,70 +1255,19 @@
         },
         "refresh": 1,
         "regex": "",
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "allowCustomValue": false,
-        "current": {
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${ds}"
-        },
-        "definition": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys!=\"__global__\", group_by_keys!=\"__group__\"},group_by_keys)",
-        "includeAll": true,
-        "name": "group_by_keys",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys!=\"__global__\", group_by_keys!=\"__group__\"},group_by_keys)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "allowCustomValue": false,
-        "current": {
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${ds}"
-        },
-        "definition": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys=~\"$group_by_keys\"},group_by_values)",
-        "includeAll": true,
-        "multi": true,
-        "name": "group_by_values",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(cardinality_estimate{interval=~\"$interval\", group_by_keys=~\"$group_by_keys\"},group_by_values)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
+        "regexApplyTo": "value",
         "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "VictoriaMetrics - Cardinality Estimations",
   "uid": "mktd5g9",
-  "version": 5
+  "version": 12,
+  "weekStart": ""
 }

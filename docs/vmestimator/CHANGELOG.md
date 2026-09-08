@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards): add "Trend" section with a long-term cardinality overview (90 days). Add dedicated "Global Churn %" and "Global Churn" (absolute) panels. Add "Top 10 Churn %" panel per group_by_keys. Remove the `instance` variable.
+
 ## [v0.1.16](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
 
 Released at 2027-09-08
