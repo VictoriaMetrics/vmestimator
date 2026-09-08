@@ -101,7 +101,7 @@ func main() {
 						return
 					}
 				}
-				const chunkSize = 100
+				const chunkSize = 500
 				esLen := uint32(len(es))
 				wg := &sync.WaitGroup{}
 			loop:
