@@ -156,6 +156,10 @@ func main() {
 			for _, e := range es {
 				e.reset()
 			}
+			cardinalityCacheMu.Lock()
+			globalChurnSnapshots = newChurnSnapshots()
+			cardinalityMetricsCacheAt = time.Time{}
+			cardinalityCacheMu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			return true
 		}

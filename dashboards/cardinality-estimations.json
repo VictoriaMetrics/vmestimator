@@ -186,14 +186,10 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -227,13 +223,13 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "(\n    sum(\n        max(cardinality_estimate{\n            job=~\"$job\",\n            instance=~\"$instance\",\n            group_by_keys=\"__global__\",\n            interval=\"$churn_long\"\n        }) without (instance)\n    ) by (group_by_keys,group_by_values)\n    -\n    sum(\n        max(cardinality_estimate{\n            job=~\"$job\",\n            instance=~\"$instance\",\n            group_by_keys=\"__global__\",\n            interval=\"$churn_short\"\n        }) without (instance)\n    ) by (group_by_keys,group_by_values)\n)\n/\nsum(\n    max(cardinality_estimate{\n        job=~\"$job\",\n        instance=~\"$instance\",\n        group_by_keys=\"__global__\",\n        interval=\"$churn_long\"\n    }) without (instance)\n) by (group_by_keys,group_by_values)\n* 100",
+          "expr": "max(max_over_time(cardinality_churn_ratio{\n        job=~\"$job\",\n        instance=~\"$instance\",\n        group_by_keys=\"__global__\",\n}[3m])) without (instance, churn_interval)",
           "legendFormat": "{{interval}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Global Churn ($churn_short - $churn_long)",
+      "title": "Global Churn",
       "type": "timeseries"
     },
     {
@@ -608,14 +604,10 @@
               {
                 "color": "green",
                 "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
-          "unit": "percent"
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -649,13 +641,13 @@
             "uid": "${ds}"
           },
           "editorMode": "code",
-          "expr": "topk(\n    10,\n    (\n        sum(\n            max(cardinality_estimate{\n                job=~\"$job\",\n                instance=~\"$instance\",\n                group_by_keys=~\"$group_by_keys\",\n                group_by_keys!=\"__global__\",\n                group_by_keys!=\"__group__\",\n                group_by_values=~\"$group_by_values\",\n                interval=\"$churn_long\"\n            }) without (instance)\n        ) by (group_by_keys,group_by_values)\n        -\n        sum(\n            max(cardinality_estimate{\n                job=~\"$job\",\n                instance=~\"$instance\",\n                group_by_keys=~\"$group_by_keys\",\n                group_by_keys!=\"__global__\",\n                group_by_keys!=\"__group__\",\n                group_by_values=~\"$group_by_values\",\n                interval=\"$churn_short\"\n            }) without (instance)\n        ) by (group_by_keys,group_by_values)\n    )\n    /\n    sum(\n        max(cardinality_estimate{\n            job=~\"$job\",\n            instance=~\"$instance\",\n            group_by_keys=~\"$group_by_keys\",\n            group_by_keys!=\"__global__\",\n            group_by_keys!=\"__group__\",\n            group_by_values=~\"$group_by_values\",\n            interval=\"$churn_long\"\n        }) without (instance)\n    ) by (group_by_keys,group_by_values) * 100\n)",
+          "expr": "topk(\n    10,\n    max(max_over_time(cardinality_churn_ratio{\n            job=~\"$job\",\n            instance=~\"$instance\",\n            group_by_keys=~\"$group_by_keys\",\n            group_by_keys!=\"__global__\",\n            group_by_keys!=\"__group__\",\n            group_by_values=~\"$group_by_values\"\n    }[15s])) without (instance, churn_interval)\n)",
           "legendFormat": "{{interval}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Top 10 Churn ($churn_short - $churn_long)",
+      "title": "Top 10 Churn",
       "type": "timeseries"
     }
   ],
@@ -681,7 +673,9 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": "All",
+          "text": [
+            "All"
+          ],
           "value": [
             "$__all"
           ]
@@ -787,7 +781,9 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": "All",
+          "text": [
+            "All"
+          ],
           "value": [
             "$__all"
           ]
@@ -809,64 +805,16 @@
         "refresh": 1,
         "regex": "",
         "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "allowCustomValue": false,
-        "current": {
-          "text": "15m0s",
-          "value": "15m0s"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${ds}"
-        },
-        "definition": "label_values(cardinality_estimate,interval)",
-        "includeAll": false,
-        "name": "churn_short",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(cardinality_estimate,interval)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "allowCustomValue": false,
-        "current": {
-          "text": "30m0s",
-          "value": "30m0s"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${ds}"
-        },
-        "definition": "label_values(cardinality_estimate,interval)",
-        "includeAll": false,
-        "name": "churn_long",
-        "options": [],
-        "query": {
-          "qryType": 1,
-          "query": "label_values(cardinality_estimate,interval)",
-          "refId": "PrometheusVariableQueryEditor-VariableQuery"
-        },
-        "refresh": 1,
-        "regex": "",
-        "type": "query"
       }
     ]
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "VictoriaMetrics - Cardinality Estimations",
   "uid": "mktd5g9",
-  "version": 3
+  "version": 5
 }
