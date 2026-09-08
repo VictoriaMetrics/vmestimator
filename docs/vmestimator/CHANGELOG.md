@@ -16,12 +16,16 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.16](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
+
+Released at 2027-09-08
+
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `churn_interval` stream config option. When set, vmestimator emits `cardinality_churn_ratio` metrics measuring how quickly the series set changes within the measurement window. The ratio is computed as `(2*|A∪B| - |A| - |B|) / |A∪B|` where `A` is the retained HLL snapshot and `B` is the current sketch, resulting in a value in `[0, 1]` where `0` means a stable series set and `1` means complete churn. See [churn-calculation](https://docs.victoriametrics.com/victoriametrics/vmestimator/#churn-calculation) and [#24](https://github.com/VictoriaMetrics/vmestimator/issues/24).
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): simplify overflow handling in the deduplicator. Expose `vmestimator_deduplication_passed_total`, `vmestimator_deduplication_dropped_total`, `vmestimator_deduplication_bloom_filter_size`, and `vmestimator_deduplication_bloom_filter_max_size` metrics for monitoring deduplication effectiveness. See [#48](https://github.com/VictoriaMetrics/vmestimator/pull/48).
 
 ## [v0.1.15](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.15)
 
-Released at 2026-08-17
+Released at 2027-08-17
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add time series deduplicator to drop duplicate series within a configurable time window before forwarding to estimators. Use `-deduplication.interval` to enable it, `-deduplication.maxSizeBytes` or `-deduplication.maxSize` to cap memory usage. When cardinality approaches 80% of the limit, the deduplicator gradually falls back to pass-through mode to keep bloom filters below saturation. See [#44](https://github.com/VictoriaMetrics/vmestimator/pull/44).
 
