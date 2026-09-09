@@ -38,530 +38,7 @@
         "type": "prometheus",
         "uid": "${ds}"
       },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 0,
-        "y": 1
-      },
-      "id": 29,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"}\n)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Cardinality Now",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 6,
-        "y": 1
-      },
-      "id": 30,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"} offset 1d\n)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Cardinality 1d Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 12,
-        "y": 1
-      },
-      "id": 31,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"} offset 1w\n)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Cardinality 1w Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 18,
-        "y": 1
-      },
-      "id": 32,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n    cardinality_estimate{job=\"$job\",group_by_keys=~\"__global__\",interval=~\"$interval\"} offset 30d\n)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Cardinality 1M Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 0,
-        "y": 4
-      },
-      "id": 25,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n        max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[3m])\n) by (job)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Churn Now",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 6,
-        "y": 4
-      },
-      "id": 26,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n        max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[30m] offset 1d)\n) by (job)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Churn 1d Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 12,
-        "y": 4
-      },
-      "id": 27,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n        max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[30m] offset 1w)\n) by (job)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Churn 1w Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "noValue": "0",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 18,
-        "y": 4
-      },
-      "id": 28,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.4.3",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          },
-          "editorMode": "code",
-          "expr": "max(\n        max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[30m] offset 30d)\n) by (job)",
-          "legendFormat": "{{group_by_values}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Churn 1M Ago",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${ds}"
-      },
-      "description": "Long-term cardinality trend. Panel time is fixed to last 90 days regardless of the dashboard time picker.",
+      "description": "Total number of unique time series observed by the $job job over the last 90 days (fixed window, independent of the dashboard time picker).\n\nRequires [a global estimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/#cardinality-metrics) configured without a group_by option.\n\n**Capacity planning:** project the trend to 1 year to estimate future cardinality growth.\n\n**Incident investigation:** focus the dashboard time range on the spike, then review the Job, Metric Name, and Label cardinality panels below to identify the source of the growth. Or use a drilldown section.\n",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -616,10 +93,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 12,
+        "h": 8,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 1
       },
       "id": 15,
       "options": {
@@ -655,6 +132,107 @@
       ],
       "timeFrom": "90d",
       "title": "Global Cardinality Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "description": "Ratio of unique time series replaced (churned) observed by the $job job over the last 90 days (fixed window, independent of the dashboard time picker).\n\n  [High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means a large fraction of series are short-lived. New label combinations keep appearing while old ones expire. This adds pressure on the index and increases memory usage even\n  when total cardinality looks stable.\n\n  Possible causes:\n  - High-cardinality label introduced, such as user_id, trace_id, http_path etc.\n  - Service in a constant crash loop for long time.\n  - Services start and disappear often, or they add and remove their exposed metrics.\n\nRequires [a global estimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/#churn-calculation) configured without a group_by option and churn_interval set.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "editorMode": "code",
+          "expr": "max(\n    max_over_time(cardinality_churn_ratio{job=\"$job\",group_by_keys=\"__global__\",interval=~\"$interval\"}[5m])\n)",
+          "legendFormat": "Global Cardinality",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "90d",
+      "title": "Global Churn Trend",
       "type": "timeseries"
     },
     {
@@ -712,7 +290,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 17
       },
       "id": 18,
       "options": {
@@ -805,7 +383,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 28
       },
       "id": 21,
       "options": {
@@ -890,7 +468,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 39
       },
       "id": 22,
       "options": {
@@ -926,7 +504,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 50
       },
       "id": 4,
       "panels": [
@@ -996,7 +574,7 @@
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 53
+            "y": 78
           },
           "id": 1,
           "options": {
@@ -1095,7 +673,7 @@
             "h": 9,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 88
           },
           "id": 7,
           "options": {
@@ -1193,7 +771,7 @@
             "h": 9,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 88
           },
           "id": 12,
           "options": {
@@ -1238,7 +816,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 51
       },
       "id": 5,
       "panels": [
@@ -1270,7 +848,7 @@
             "h": 3,
             "w": 6,
             "x": 0,
-            "y": 73
+            "y": 52
           },
           "id": 23,
           "options": {
@@ -1340,7 +918,7 @@
             "h": 3,
             "w": 6,
             "x": 6,
-            "y": 73
+            "y": 52
           },
           "id": 24,
           "options": {
@@ -1413,7 +991,7 @@
             "h": 3,
             "w": 6,
             "x": 12,
-            "y": 73
+            "y": 52
           },
           "id": 6,
           "options": {
@@ -1478,7 +1056,7 @@
             "h": 3,
             "w": 6,
             "x": 18,
-            "y": 73
+            "y": 52
           },
           "id": 3,
           "options": {
@@ -1581,7 +1159,7 @@
             "h": 12,
             "w": 24,
             "x": 0,
-            "y": 76
+            "y": 55
           },
           "id": 2,
           "options": {
@@ -1678,7 +1256,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 88
+            "y": 67
           },
           "id": 8,
           "options": {
@@ -1773,7 +1351,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 88
+            "y": 67
           },
           "id": 13,
           "options": {
@@ -1912,9 +1490,7 @@
         "allValue": ".*",
         "allowCustomValue": false,
         "current": {
-          "text": [
-            "All"
-          ],
+          "text": "All",
           "value": [
             "$__all"
           ]
@@ -1948,6 +1524,6 @@
   "timezone": "utc",
   "title": "VictoriaMetrics - Cardinality Estimations",
   "uid": "mktd5g9",
-  "version": 18,
+  "version": 24,
   "weekStart": ""
 }
