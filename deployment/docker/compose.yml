@@ -9,7 +9,6 @@ services:
     ports:
       - 8429:8429
     volumes:
-      - vmagentdata:/vmagentdata
       - ./scrape.yml:/etc/prometheus/scrape.yml
     command:
       - "--promscrape.config=/etc/prometheus/scrape.yml"
@@ -77,6 +76,5 @@ services:
     restart: always
 
 volumes:
-  vmagentdata: {}
   vmdata: {}
   grafanadata: {}

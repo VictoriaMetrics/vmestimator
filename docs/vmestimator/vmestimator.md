@@ -99,7 +99,7 @@ docker run --rm \
   -config=/streams.yaml
 ```
 
-Ingest metrics into `vmestimator` via `http://127.0.0.1:8490/cardinality/api/v1/write` path, observe cardinalit estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics). 
+Ingest metrics into `vmestimator` via `http://127.0.0.1:8490/cardinality/api/v1/write` path, observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics). 
 
 See [Use Cases](https://github.com/VictoriaMetrics/vmestimator#use-cases) for more configuration examples and
 [Command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags) for all available options.
@@ -119,7 +119,7 @@ To stop the environment, run the following command:
 make docker-down
 ```
 
-See the full compose file [here](https://github.com/VictoriaMetrics/vmestimator/tree/main/deployment/docker/compose.yml).
+See the full compose file [here](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/compose.yml).
 
 ### Start with Binary
 
@@ -127,7 +127,7 @@ See [How to build binary from sources](https://github.com/VictoriaMetrics/vmesti
 
 Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml). Then run `vmestimator` with the following command:
 ```sh
-./vmestimator -config=/path/to/streams.yaml
+./vmestimator-prod -config=/path/to/streams.yaml
 ```
 
 Ingest metrics into `vmestimator` via `http://127.0.0.1:8490/cardinality/api/v1/write` path, observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics).

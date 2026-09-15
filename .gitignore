@@ -29,3 +29,4 @@ coverage.txt
 cspell.json
 *~
 deployment/docker/provisioning/plugins/
+/vmdocs/
