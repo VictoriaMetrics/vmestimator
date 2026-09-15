@@ -25,7 +25,7 @@ long-term trend tracking, and capacity planning. See more [use cases](https://do
 * [configurable measurement windows, labels grouping](https://docs.victoriametrics.com/victoriametrics/vmestimator/#configuration)
 * low resource usage: can handle millions of samples/s and hundreds of millions unique time series on a single machine
 * [horizontally scalable](https://docs.victoriametrics.com/victoriametrics/vmestimator/#cluster)
-* goes with preset of [alerting rules](https://docs.victoriametrics.com/victoriametrics/vmestimator/#alerting) and [Grafana dashboards](https://docs.victoriametrics.com/victoriametrics/vmestimator/#dashboards)
+* ships with a preset set of [alerting rules](https://docs.victoriametrics.com/victoriametrics/vmestimator/#alerting) and [Grafana dashboards](https://docs.victoriametrics.com/victoriametrics/vmestimator/#dashboards)
 
 ## Design
 
@@ -77,7 +77,7 @@ cardinality_estimate{interval="5m0s",filter="",group_by_keys="__name__",group_by
 ```
 
 The next step is to collect cardinality estimates and to deliver to the monitoring system, so we can visualize or alert on them.
-We can re-use the same `vmagent` instance for this purpose, but it is recommended to run a dedicated pipeline for caridnality estimation. This allows isolating impact: cardonality estimation won't affect the main observability pipeline, and if the main observability pipeline becomes unavailable - cardinality estimations will remain available:
+We can re-use the same `vmagent` instance for this purpose, but it is recommended to run a dedicated pipeline for cardinality estimation. This allows isolating impact: cardinality estimation won't affect the main observability pipeline, and if the main observability pipeline becomes unavailable - cardinality estimations will remain available:
 
 ![design-2](/victoriametrics/vmestimator/design-2.webp)
 
