@@ -1,0 +1,82 @@
+services:
+  #  Metrics collector.
+  #  It scrapes targets defined in --promscrape.config
+  #  and replicates them to configured --remoteWrite.url
+  vmagent:
+    image: victoriametrics/vmagent:v1.152.0
+    depends_on:
+      - "victoriametrics"
+    ports:
+      - 8429:8429
+    volumes:
+      - vmagentdata:/vmagentdata
+      - ./scrape.yml:/etc/prometheus/scrape.yml
+    command:
+      - "--promscrape.config=/etc/prometheus/scrape.yml"
+      - "--remoteWrite.url=http://victoriametrics:8428/api/v1/write"
+      - "--remoteWrite.url=http://vmestimator:8490/cardinality/api/v1/write"
+      - "--remoteWrite.disableOnDiskQueue=false,true" # disable queueing for vmestimator
+      - "--remoteWrite.disableMetadata=false,true"    # disable metadata for vmestimator
+    restart: always
+
+  # VictoriaMetrics instance, a single process responsible for
+  # storing metrics and serve read requests.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.152.0
+    ports:
+      - 8428:8428
+    volumes:
+      - vmdata:/storage
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+      - "--vmalert.proxyURL=http://vmalert:8880"
+    restart: always
+
+  vmestimator:
+    image: victoriametrics/vmestimator:v0.1.16
+    depends_on:
+      - "vmagent"
+    ports:
+      - 8490:8490
+    volumes:
+      - ./../../streams.yaml:/etc/streams.yml
+    command:
+      - "--config=/etc/streams.yml"
+    restart: always
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    depends_on:
+      - "victoriametrics"
+    ports:
+      - 3000:3000
+    restart: always
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./provisioning/datasources/prometheus/single.yml:/etc/grafana/provisioning/datasources/single.yml
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./../../dashboards/cardinality-estimations.json:/var/lib/grafana/dashboards/cardinality-estimations.json
+      - ./../../dashboards/vmestimator.json:/var/lib/grafana/dashboards/vmestimator.json
+
+  # vmalert executes alerting and recording rules
+  vmalert:
+    image: victoriametrics/vmalert:v1.152.0
+    depends_on:
+      - "victoriametrics"
+    ports:
+      - 8880:8880
+    volumes:
+      - ./rules/alerts-cardinality.yml:/etc/alerts/alerts-cardinality.yml
+    command:
+      - "--datasource.url=http://victoriametrics:8428/"
+      - "--remoteRead.url=http://victoriametrics:8428/"
+      - "--remoteWrite.url=http://vmagent:8429/"
+      - "--notifier.blackhole"
+      - "--rule=/etc/alerts/*.yml"
+    restart: always
+
+volumes:
+  vmagentdata: {}
+  vmdata: {}
+  grafanadata: {}
