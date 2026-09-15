@@ -114,6 +114,11 @@ make docker-up
 
 Visit [http://127.0.0.1:3000](http://127.0.0.1:3000) for Grafana (_login with admin:admin_) to see `vmestimator` dashboards. Or observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics). 
 
+To stop the environment, run the following command:
+```
+make docker-down
+```
+
 See the full compose file [here](https://github.com/VictoriaMetrics/vmestimator/tree/main/deployment/docker/compose.yml).
 
 ### Start with Binary
