@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/envflag"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
@@ -27,9 +28,10 @@ var (
 	configPath      = flag.String("config", "", "Path to YAML configuration file. "+
 		"Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example")
 	storageNodes = flagutil.NewArrayString("storageNode", "HTTP URLs of remote vmestimator nodes to query for cardinality snapshots, e.g. http://vmestimator-2:8490")
-
-	prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
+	workers      = flag.Int(`workers`, max(1, cgroup.AvailableCPUs()*2), `The number of workers for processing time series insertions concurrently. Each worker handles insertMany calls for a single estimator. Defaults to 2x the number of available CPUs.`)
 )
+
+var prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
 
 func main() {
 	envflag.Parse()
@@ -48,9 +50,6 @@ func main() {
 			}
 		}
 	}
-
-	startWorkers()
-	defer stopWorkers()
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -80,6 +79,11 @@ func main() {
 		listenAddrs = []string{":8490"}
 	}
 
+	if *workers < 1 {
+		logger.Fatalf("BUG: -workers must be at least 1, got %d", *workers)
+	}
+	concurrencyChan := make(chan struct{}, *workers)
+
 	logger.Infof("starting vmestimator at %q", listenAddrs)
 	startTime := time.Now()
 
@@ -104,7 +108,7 @@ func main() {
 				const chunkSize = 500
 				esLen := uint32(len(es))
 				wg := &sync.WaitGroup{}
-			loop:
+				r.Context().Done()
 				for start := 0; start < len(tss); start += chunkSize {
 					end := start + chunkSize
 					if end > len(tss) {
@@ -113,16 +117,15 @@ func main() {
 					tssChunk := tss[start:end]
 
 					esStart := fastrand.Uint32n(esLen)
-
 					for j := uint32(0); j < esLen; j++ {
 						idx := (esStart + j) % esLen
-						wg.Add(1)
-						select {
-						case workersCh <- workerReq{e: es[idx], wg: wg, tss: tssChunk}:
-						case <-r.Context().Done():
-							wg.Done()
-							break loop
-						}
+						e := es[idx]
+
+						concurrencyChan <- struct{}{}
+						wg.Go(func() {
+							e.insertMany(tssChunk)
+							<-concurrencyChan
+						})
 					}
 				}
 				wg.Wait()
