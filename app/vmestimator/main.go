@@ -82,7 +82,7 @@ func main() {
 	if *workers < 1 {
 		logger.Fatalf("BUG: -workers must be at least 1, got %d", *workers)
 	}
-	concurrencyChan := make(chan struct{}, *workers)
+	workersChan := make(chan struct{}, *workers)
 
 	logger.Infof("starting vmestimator at %q", listenAddrs)
 	startTime := time.Now()
@@ -120,10 +120,10 @@ func main() {
 						idx := (esStart + j) % esLen
 						e := es[idx]
 
-						concurrencyChan <- struct{}{}
+						workersChan <- struct{}{}
 						wg.Go(func() {
 							e.insertMany(tssChunk)
-							<-concurrencyChan
+							<-workersChan
 						})
 					}
 				}
