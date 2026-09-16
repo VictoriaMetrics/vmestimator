@@ -108,7 +108,6 @@ func main() {
 				const chunkSize = 500
 				esLen := uint32(len(es))
 				wg := &sync.WaitGroup{}
-				r.Context().Done()
 				for start := 0; start < len(tss); start += chunkSize {
 					end := start + chunkSize
 					if end > len(tss) {
