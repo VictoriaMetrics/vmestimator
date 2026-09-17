@@ -527,7 +527,7 @@ Two Grafana dashboards are available in the [dashboards](https://github.com/Vict
 For performance reasons, `vmestimator` doesn't decode [metric samples](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#raw-samples) in received Remote Write requests. It only parses [labels](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#labels). This optimization introduces the following limitations:
 1. Cardinality is estimated based on time of arrival of the request, not the actual timestamps of the samples within the request. If `vmestimator` receives backfilling traffic with month old timestamps, the cardinality estimation will be estimated as of now.
 2. [Staleness markers](https://prometheus.io/docs/prometheus/latest/querying/basics/#staleness) aren't decoded. A time series carrying a staleness marker is counted like any other received time series.
-3. Consistent order of labels in time series matters. `vmestimator` expects that clients already send time series with deterministic orders of labels, so it skips sorting for performance reasons. If time series arrive with unsorted order of labels within time series. then cardinality estimations can become inflated. For example, `metric{foo=bar, baz=qux}` and `metric{baz=qux, foo=bar}` are considered as two distinct time series. 
+3. Consistent order of labels in time series matters. `vmestimator` expects that clients already send time series with deterministic orders of labels, so it skips sorting for performance reasons. If time series arrive with unsorted order of labels within time series, then cardinality estimations can become inflated. For example, `metric{foo=bar, baz=qux}` and `metric{baz=qux, foo=bar}` are considered as two distinct time series.
 
 ## How to build from sources
 
