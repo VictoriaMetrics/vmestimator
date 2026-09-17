@@ -522,6 +522,13 @@ Two Grafana dashboards are available in the [dashboards](https://github.com/Vict
 - [VictoriaMetrics - Cardinality Estimations](https://play-grafana.victoriametrics.com/d/mktd5g9/victoriametrics-cardinality-estimations) — cardinality estimations: shows estimations, churn over configured label dimensions.
   ![dashboard-cardinality](/victoriametrics/vmestimator/dashboard-cardinality.webp)
 
+## Limitations
+
+For performance reasons, `vmestimator` doesn't decode the [metric samples](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#raw-samples) in received Remote Write requests. It only parses [labels](https://docs.victoriametrics.com/victoriametrics/keyconcepts/#labels). This optimization introduces the following limitations:
+1. Cardinality is estimated based on time of arrival of the request, not the actual timestamps of the samples within request. If `vmestimator` receives backfilling traffic with month old timestamps the cardinality estimation will be exposed as of now.
+2. [Staleness markers](https://prometheus.io/docs/prometheus/latest/querying/basics/#staleness) are accounted as regular samples. If the received sample contained a staleness marker, the `vmestimator` will still account for that time series in estimation.
+3. Consistent order of labels in time series matters. `vmestimator` expects that clients already send time series with deterministic orders of labels, so its skips sorting for performance reasons. If time series arrive with unsorted order of labels within time series - cardinality estimations can become inflated, as `metric{foo=bar, baz=qux}` and `metric{baz=qux, foo=bar}` will be considered as two distinct time series. 
+
 ## How to build from sources
 
 It is recommended to use the [docker images](https://hub.docker.com/r/victoriametrics/vmestimator).
