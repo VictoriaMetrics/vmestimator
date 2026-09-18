@@ -86,6 +86,8 @@ The resulting topology looks like this:
 
 ## Install
 
+### Start with Docker
+
 Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml).
 Run the Docker image from [Docker Hub](https://hub.docker.com/r/victoriametrics/vmestimator) or [Quay](https://quay.io/repository/victoriametrics/vmestimator), mounting your config file:
 
@@ -97,10 +99,41 @@ docker run --rm \
   -config=/streams.yaml
 ```
 
+Ingest metrics into `vmestimator` via `http://127.0.0.1:8490/cardinality/api/v1/write` path, observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics). 
+
 See [Use Cases](https://github.com/VictoriaMetrics/vmestimator#use-cases) for more configuration examples and
 [Command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags) for all available options.
 
-To build from sources, see [How to build from sources](https://github.com/VictoriaMetrics/vmestimator#how-to-build-from-sources).
+### Start with Docker Compose 
+
+To run vmestimator in docker-compose environment, clone vmestimator repository and run the following command:
+```sh
+git clone https://github.com/VictoriaMetrics/vmestimator.git && cd vmestimator
+make docker-up
+```
+
+Visit [http://127.0.0.1:3000](http://127.0.0.1:3000) for Grafana (_login with admin:admin_) to see `vmestimator` dashboards. Or observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics). 
+
+To stop the environment, run the following command:
+```
+make docker-down
+```
+
+See the full compose file [here](https://github.com/VictoriaMetrics/vmestimator/blob/main/deployment/docker/compose.yml).
+
+### Start with Binary
+
+See [How to build binary from sources](https://github.com/VictoriaMetrics/vmestimator#how-to-build-from-sources) or download pre-built binaries from [GitHub Releases](https://github.com/VictoriaMetrics/vmestimator/releases).
+
+Create a `streams.yaml` from [example config](https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml). Then run `vmestimator` with the following command:
+```sh
+./vmestimator-prod -config=/path/to/streams.yaml
+```
+
+Ingest metrics into `vmestimator` via `http://127.0.0.1:8490/cardinality/api/v1/write` path, observe cardinality estimation metrics at [http://127.0.0.1:8490/metrics](http://127.0.0.1:8490/metrics).
+
+See [Use Cases](https://github.com/VictoriaMetrics/vmestimator#use-cases) for more configuration examples and
+[Command-line flags](https://github.com/VictoriaMetrics/vmestimator#command-line-flags) for all available options.
 
 ## Configuration
 
