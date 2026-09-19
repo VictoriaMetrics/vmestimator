@@ -54,9 +54,10 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 }
 
 type snapshot struct {
-	Interval time.Duration
-	Labels   map[string]string
-	Filter   string
+	Interval      time.Duration
+	ChurnInterval time.Duration
+	Labels        map[string]string
+	Filter        string
 
 	GroupBy         []string
 	GroupLimit      int64
@@ -117,6 +118,9 @@ func (s *snapshot) merge(other *snapshot) {
 	}
 
 	s.Interval = other.Interval
+	if other.ChurnInterval > s.ChurnInterval {
+		s.ChurnInterval = other.ChurnInterval
+	}
 	s.Filter = other.Filter
 	for k, v := range other.Labels {
 		if s.Labels == nil {
@@ -288,6 +292,7 @@ func (s *snapshot) reset() {
 	s.GroupLimit = 0
 	s.GroupRejectSize = 0
 	s.Interval = 0
+	s.ChurnInterval = 0
 	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
 	clear(s.Labels)

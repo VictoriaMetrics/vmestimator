@@ -7,11 +7,15 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
 )
+
+// globalChurnSnapshots must be accessed only under cardinalityCacheMu.
+var globalChurnSnapshots = newChurnSnapshots()
 
 var (
 	cardinalityMetricsWrites        = metrics.NewCounter(`vmestimator_write_cardinality_metrics_total`)
@@ -36,13 +40,24 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 
 	cardinalityCacheMu.Lock()
 	if time.Since(cardinalityMetricsCacheAt) >= *cardinalityMetricsCacheTTL || *cardinalityMetricsCacheTTL == 0 {
+		now := time.Now()
 		plain := bytes.NewBuffer(cardinalityMetricsCache[:0])
 		for _, e := range es {
 			e.writeMetrics(plain)
 		}
-
+		for _, e := range es {
+			if e.buckets[0].churnInterval > 0 {
+				if err := e.toSnapshot(func(s *snapshot) error {
+					globalChurnSnapshots.update(s, now)
+					return nil
+				}); err != nil {
+					logger.Errorf("updating churn snapshots failed: %s", err)
+				}
+			}
+		}
 		if len(storageNodeURLs) > 0 {
 			ss := newSnapshots()
+			var fetchFailed atomic.Bool
 			var wg sync.WaitGroup
 			for _, nodeURL := range storageNodeURLs {
 				wg.Add(1)
@@ -50,14 +65,29 @@ func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []str
 					defer wg.Done()
 					if err := fetchAndMergeSnapshots(url, ss.add); err != nil {
 						logger.Errorf("fetch snapshots from %s: %s", url, err)
+						fetchFailed.Store(true)
 					}
 				}(nodeURL)
 			}
 			wg.Wait()
 
+			// Update churn only when all nodes responded; a partial union would
+			// compare a full-cluster sketch against an incomplete one next scrape.
+			if !fetchFailed.Load() {
+				for _, s := range ss.m {
+					if s.ChurnInterval > 0 {
+						globalChurnSnapshots.update(s, now)
+					}
+				}
+			}
+
 			if err := ss.writeMetrics(plain); err != nil {
 				logger.Errorf("write cardinality metrics: %s", err)
 			}
+		}
+		globalChurnSnapshots.cleanup(now)
+		if err := globalChurnSnapshots.writeMetrics(plain); err != nil {
+			logger.Errorf("write churn metrics: %s", err)
 		}
 
 		cardinalityMetricsCache = plain.Bytes()

@@ -54,6 +54,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		cfg.HLLSparse = new(true)
 	}
 
+	if cfg.ChurnInterval > cfg.Interval {
+		return nil, fmt.Errorf("churn_interval %s must not exceed interval %s", cfg.ChurnInterval, cfg.Interval)
+	}
+
 	if len(cfg.GroupBy) > 5 {
 		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
 	}
@@ -102,12 +106,13 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	for i := 0; i < len(e.buckets); i++ {
 		eb := &estimatorBucket{
-			idx:       i,
-			groupSize: e.groupSize,
-			groupBy:   cfg.GroupBy,
-			interval:  cfg.Interval,
-			labels:    cfg.Labels,
-			filter:    cfg.Filter,
+			idx:           i,
+			groupSize:     e.groupSize,
+			groupBy:       cfg.GroupBy,
+			interval:      cfg.Interval,
+			churnInterval: cfg.ChurnInterval,
+			labels:        cfg.Labels,
+			filter:        cfg.Filter,
 
 			precision:       cfg.HLLPrecision,
 			sparse:          *cfg.HLLSparse,
@@ -284,6 +289,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		}
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
 		s.Interval = eb0.interval
+		s.ChurnInterval = eb0.churnInterval
 		s.Filter = eb0.filter
 		s.Labels = eb0.labels
 		s.GroupBy = nil
@@ -296,6 +302,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval
+	s.ChurnInterval = eb0.churnInterval
 	s.Filter = eb0.filter
 	s.Labels = eb0.labels
 
@@ -365,18 +372,6 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	return cb(s)
 }
 
-// estimate returns the current unique-series count by merging all bucket sketches.
-func (e *estimator) estimate() uint64 {
-	eb0 := e.buckets[0]
-	resSK := eb0.newSketch()
-	for _, eb := range e.buckets {
-		eb.mu.Lock()
-		eb.mergeSketches(eb.sketch, eb.prevSketch, resSK)
-		eb.mu.Unlock()
-	}
-	return resSK.Estimate()
-}
-
 func (e *estimator) writeMetrics(w io.Writer) {
 	var dropped uint64
 	if err := e.toSnapshot(func(s *snapshot) error {
@@ -439,6 +434,7 @@ type estimatorBucket struct {
 	idx             int
 	groupBy         []string
 	interval        time.Duration
+	churnInterval   time.Duration
 	filter          string
 	precision       uint8
 	sparse          bool
