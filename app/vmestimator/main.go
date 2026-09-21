@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
@@ -48,9 +47,6 @@ func main() {
 			}
 		}
 	}
-
-	startWorkers()
-	defer stopWorkers()
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -101,31 +97,12 @@ func main() {
 						return
 					}
 				}
-				const chunkSize = 500
 				esLen := uint32(len(es))
-				wg := &sync.WaitGroup{}
-			loop:
-				for start := 0; start < len(tss); start += chunkSize {
-					end := start + chunkSize
-					if end > len(tss) {
-						end = len(tss)
-					}
-					tssChunk := tss[start:end]
-
-					esStart := fastrand.Uint32n(esLen)
-
-					for j := uint32(0); j < esLen; j++ {
-						idx := (esStart + j) % esLen
-						wg.Add(1)
-						select {
-						case workersCh <- workerReq{e: es[idx], wg: wg, tss: tssChunk}:
-						case <-r.Context().Done():
-							wg.Done()
-							break loop
-						}
-					}
+				esStart := fastrand.Uint32n(esLen)
+				for j := uint32(0); j < esLen; j++ {
+					idx := (esStart + j) % esLen
+					es[idx].insertMany(tss)
 				}
-				wg.Wait()
 			})
 			if err != nil {
 				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)
