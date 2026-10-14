@@ -2732,14 +2732,6 @@
       },
       {
         "allowCustomValue": false,
-        "current": {
-          "text": [
-            "vmestimator-benchmark-vm-cluster"
-          ],
-          "value": [
-            "vmestimator-benchmark-vm-cluster"
-          ]
-        },
         "datasource": {
           "type": "prometheus",
           "uid": "${ds}"

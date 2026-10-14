@@ -7,9 +7,14 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/memory"
+	"github.com/VictoriaMetrics/metrics"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
+)
+
+var (
+	deduplicationPassedTotal  = metrics.NewCounter(`vmestimator_deduplication_passed_total`)
+	deduplicationDroppedTotal = metrics.NewCounter(`vmestimator_deduplication_dropped_total`)
 )
 
 var (
@@ -57,16 +62,6 @@ type deduplicator struct {
 	// smoothing CPU spikes across time.
 	bfs [10]atomic.Pointer[deduplicatorBloomFilter]
 
-	// e estimates the true unique-series count using an estimator in global
-	// mode (no group_by). Its sharded buckets avoid any global lock on the
-	// write path.
-	e *estimator
-
-	// Gradual pass-through ratio stored per-1000.
-	// 0 = deduplicate all; 1000 = pass everything through.
-	// When unique > maxSize, ratio = (unique - maxSize) * 1000 / unique.
-	passthroughPer1000 atomic.Int64
-
 	stopCh chan struct{}
 }
 
@@ -83,26 +78,27 @@ func newDeduplicator(maxSize int, interval time.Duration) *deduplicator {
 		panic(fmt.Sprintf("BUG: interval must be greater than %v; got %v", deduplicationMinInterval, interval))
 	}
 
-	e, err := newEstimator(EstimatorConfig{
-		Interval:     interval,
-		HLLSparse:    new(false),
-		HLLPrecision: 12,
-	})
-	if err != nil {
-		panic(fmt.Sprintf("BUG: cannot create deduplicator estimator: %s", err))
-	}
-
 	d := &deduplicator{
 		maxSize:       maxSize,
 		interval:      interval,
 		bucketMaxSize: maxSize / 10,
-		e:             e,
 		stopCh:        make(chan struct{}),
 	}
 
 	for i := range d.bfs {
 		d.bfs[i].Store(newDeduplicatorBloomFilter(d.bucketMaxSize))
 	}
+
+	metrics.NewGauge(`vmestimator_deduplication_bloom_filter_max_size`, func() float64 {
+		return float64(d.maxSize)
+	})
+	metrics.NewGauge(`vmestimator_deduplication_bloom_filter_size`, func() float64 {
+		var total int64
+		for i := range d.bfs {
+			total += d.bfs[i].Load().size.Load()
+		}
+		return float64(total)
+	})
 
 	go d.runRotation()
 	return d
@@ -116,41 +112,34 @@ func (d *deduplicator) filter(src, dst []protoparser.TimeSerie) []protoparser.Ti
 		return dst
 	}
 
-	// Update the estimator with every incoming series before filtering, so
-	// cardinality estimates reflect true inbound volume regardless of deduplication
-	// decisions.
-	d.e.insertMany(src)
-
-	passthrough := d.passthroughPer1000.Load()
-
 	for i := range src {
 		ts := src[i]
 		h := ts.Fingerprint
 
-		// Overflow pass-through: deterministic by hash so the same series
-		// always lands on the same side of the split.
-		if passthrough > 0 && int64(h%1000) < passthrough {
-			dst = append(dst, ts)
+		bf := d.bfs[h%10].Load()
+		if bf.contains(h) {
+			deduplicationDroppedTotal.Inc()
 			continue
 		}
 
-		bf := d.bfs[h%10].Load()
-		if !bf.contains(h) {
+		bfSize := bf.size.Load()
+		if bfSize < int64(d.bucketMaxSize) {
 			bf.add(h)
-			dst = append(dst, ts)
 		}
+		deduplicationPassedTotal.Inc()
+		dst = append(dst, ts)
 	}
 	return dst
 }
 
 func (d *deduplicator) Stop() {
+	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_max_size`)
+	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_size`)
 	close(d.stopCh)
-	d.e.stop()
 }
 
 func (d *deduplicator) runRotation() {
 	bucketDur := d.interval / 10
-	var prevRatio int64
 
 	for {
 		now := time.Now()
@@ -165,25 +154,6 @@ func (d *deduplicator) runRotation() {
 
 		idx := (nextBoundary.UnixNano() / int64(bucketDur)) % 10
 		d.bfs[idx].Store(newDeduplicatorBloomFilter(d.bucketMaxSize))
-
-		// Recalculate pass-through ratio after each bucket rotation.
-		// The estimator handles its own sketch rotation; we just read the estimate.
-		unique := d.e.estimate()
-
-		// Start pass-through at 80% of maxSize so the bloom filters never
-		// reach saturation: at full capacity false-positive rate spikes,
-		// which would silently drop legitimate new series.
-		passthroughThreshold := uint64(d.maxSize) * 4 / 5
-		var ratio int64
-		if unique > passthroughThreshold {
-			ratio = int64((unique - passthroughThreshold) * 1000 / unique)
-		}
-		d.passthroughPer1000.Store(ratio)
-
-		if ratio != prevRatio {
-			prevRatio = ratio
-			logger.Infof("deduplicator: unique series estimate=%d maxSize=%d passthrough=%d/1000", unique, d.maxSize, ratio)
-		}
 	}
 }
 
@@ -191,6 +161,7 @@ const hashesCount = 4
 const bitsPerItem = 16
 
 type deduplicatorBloomFilter struct {
+	size atomic.Int64
 	bits []uint64
 }
 
@@ -245,6 +216,10 @@ func (f *deduplicatorBloomFilter) add(h uint64) bool {
 			}
 			w = atomic.LoadUint64(&bits[word])
 		}
+	}
+
+	if isNew {
+		f.size.Add(1)
 	}
 	return isNew
 }

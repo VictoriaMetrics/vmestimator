@@ -90,43 +90,42 @@ func TestDeduplicator_filter(t *testing.T) {
 	f(tss, makeTSS(1, 2, 3))
 }
 
-func TestDeduplicator_filterPassthrough(t *testing.T) {
+func TestDeduplicator_filterSaturated(t *testing.T) {
+	// Use minimum valid maxSize so bucketMaxSize=1_000, keeping the test fast.
 	d := newDeduplicator(10_000, time.Hour)
 	defer d.Stop()
 
-	makeTSS := func(fps ...uint64) []protoparser.TimeSerie {
-		tss := make([]protoparser.TimeSerie, len(fps))
-		for i, fp := range fps {
-			tss[i] = protoparser.TimeSerie{Fingerprint: fp}
-		}
-		return tss
+	// Saturate bucket 1 (fp%10 == 1) by inserting bucketMaxSize unique series.
+	for i := uint64(0); i < uint64(d.bucketMaxSize); i++ {
+		fp := i*10 + 1
+		d.filter([]protoparser.TimeSerie{{Fingerprint: fp}}, nil)
 	}
 
-	f := func(src, exp []protoparser.TimeSerie) {
-		t.Helper()
-		dst := d.filter(src, nil)
-		if !reflect.DeepEqual(dst, exp) {
-			t.Fatalf("filter: expected %v, got %v", exp, dst)
-		}
+	bf1 := d.bfs[1].Load()
+	if got := bf1.size.Load(); got != int64(d.bucketMaxSize) {
+		t.Fatalf("expected bucket 1 saturated at size=%d, got %d", d.bucketMaxSize, got)
 	}
 
-	// Build a batch that spans both sides of the 500 threshold.
-	// fp%1000: 1,101,201,301,401 < 500 (pass); 501,601,701,801,901 >= 500 (no pass).
-	tss := makeTSS(1, 101, 201, 301, 401, 501, 601, 701, 801, 901)
+	// Pick a new fp that maps to bucket 1 and is outside the seeded range.
+	newFP := uint64(d.bucketMaxSize)*10 + 1
+	if bf1.contains(newFP) {
+		t.Fatalf("newFP=%d is a false positive in the bloom filter; choose a different value", newFP)
+	}
 
-	// Seed BF so all series are "already seen".
-	d.filter(tss, nil)
-	f(tss, nil)
+	newTSS := []protoparser.TimeSerie{{Fingerprint: newFP}}
 
-	// Full passthrough: all series pass regardless of BF state.
-	d.passthroughPer1000.Store(1000)
-	f(tss, tss)
+	// Saturated bucket: unseen series passes through but is NOT added to the BF.
+	got := d.filter(newTSS, nil)
+	if !reflect.DeepEqual(got, newTSS) {
+		t.Fatalf("saturated: expected pass-through, got %v", got)
+	}
+	if bf1.size.Load() != int64(d.bucketMaxSize) {
+		t.Fatal("saturated: series was incorrectly added to the bloom filter")
+	}
 
-	// 50% passthrough: only series with fp%1000 < 500 pass through.
-	d.passthroughPer1000.Store(500)
-	exp := makeTSS(1, 101, 201, 301, 401)
-	f(tss, exp)
-
-	// Passthrough decision is deterministic: repeated calls yield the same result.
-	f(tss, exp)
+	// Second call: same series passes through again because it was never recorded.
+	got = d.filter(newTSS, nil)
+	if !reflect.DeepEqual(got, newTSS) {
+		t.Fatalf("saturated: expected pass-through on second call, got %v", got)
+	}
 }

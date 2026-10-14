@@ -231,3 +231,9 @@ package-via-docker-386:
 
 remove-docker-images:
 	docker image ls --format '{{.ID}}' | xargs docker image rm -f
+
+docker-up:
+	$(DOCKER_COMPOSE) -f deployment/docker/compose.yml up -d
+
+docker-down:
+	$(DOCKER_COMPOSE) -f deployment/docker/compose.yml down -v

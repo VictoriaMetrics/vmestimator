@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+- job_name: vmagent
+  static_configs:
+  - targets:
+    - vmagent:8429
+- job_name: vmalert
+  static_configs:
+  - targets:
+    - vmalert:8880
+- job_name: victoriametrics
+  static_configs:
+  - targets:
+    - victoriametrics:8428
+
+# normally, a separate monitoring pipeline should be scraping vmestimator metrics to improve reliability
+# and avoid circular metrics collection. But we do it with one agent for simplicity.
+- job_name: vmestimator
+  static_configs:
+    - targets:
+        - vmestimator:8490
