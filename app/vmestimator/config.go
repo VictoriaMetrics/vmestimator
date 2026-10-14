@@ -19,20 +19,16 @@ type Config struct {
 }
 
 type EstimatorConfig struct {
-	Filter        string            `yaml:"filter"`
-	GroupBy       []string          `yaml:"group_by"`
-	GroupLimit    int               `yaml:"group_limit"`
-	Labels        map[string]string `yaml:"labels"`
-	Interval      time.Duration     `yaml:"interval"`
-	ChurnInterval time.Duration     `yaml:"churn_interval"`
-	Buckets       int               `yaml:"buckets"`
-	HLLPrecision  uint8             `yaml:"hll_precision"`
-	HLLSparse     *bool             `yaml:"hll_sparse"`
-	// MinCardinality, when positive, overrides the global
-	// -cardinalityMetrics.minCardinality flag for this stream only.
-	// When zero, the global flag value is used.
-	// When negative, no threshold is enforced for this stream.
-	MinCardinality int64 `yaml:"min_cardinality"`
+	Filter         string            `yaml:"filter"`
+	GroupBy        []string          `yaml:"group_by"`
+	GroupLimit     int               `yaml:"group_limit"`
+	Labels         map[string]string `yaml:"labels"`
+	Interval       time.Duration     `yaml:"interval"`
+	ChurnInterval  time.Duration     `yaml:"churn_interval"`
+	Buckets        int               `yaml:"buckets"`
+	HLLPrecision   uint8             `yaml:"hll_precision"`
+	HLLSparse      *bool             `yaml:"hll_sparse"`
+	MinCardinality int64             `yaml:"min_cardinality"`
 }
 
 func loadConfig(path string) ([]*estimator, error) {

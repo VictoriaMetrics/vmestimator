@@ -204,6 +204,14 @@ streams:
     # default: 10000
     group_limit: <integer>
 
+    # Optional. Minimum cardinality estimate to expose for group_by streams.
+    # When positive, overrides the global -cardinalityMetrics.minCardinality flag for this stream only.
+    # When zero, the global flag value is used.
+    # When negative, no threshold is enforced for this stream.
+    #
+    # default: 0
+    min_cardinality: <integer>
+
     # Optional. Number of shards used to reduce lock contention during parallel ingestion.
     # Slightly increases memory for global streams (no group_by); negligible otherwise.
     # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
