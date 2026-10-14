@@ -24,10 +24,10 @@ type EstimatorConfig struct {
 	GroupLimit    int               `yaml:"group_limit"`
 	Labels        map[string]string `yaml:"labels"`
 	Interval      time.Duration     `yaml:"interval"`
+	ChurnInterval time.Duration     `yaml:"churn_interval"`
 	Buckets       int               `yaml:"buckets"`
 	HLLPrecision  uint8             `yaml:"hll_precision"`
 	HLLSparse     *bool             `yaml:"hll_sparse"`
-	ChurnInterval time.Duration     `yaml:"churn_interval"`
 	// MinCardinality, when non-nil, overrides the global
 	// -cardinalityMetrics.minCardinality flag for this stream only.
 	// When nil, the global flag value is used.
