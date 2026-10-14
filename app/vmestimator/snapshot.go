@@ -63,9 +63,6 @@ type snapshot struct {
 	GroupLimit      int64
 	GroupRejectSize int64
 
-	// MinCardinality, when positive, overrides the global
-	// -cardinalityMetrics.minCardinality flag for this stream.
-	// When negative, no threshold is enforced for this stream.
 	MinCardinality int64
 
 	// prom string metric => hll
