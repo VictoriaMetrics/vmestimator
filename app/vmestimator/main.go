@@ -35,18 +35,19 @@ func main() {
 	buildinfo.Init()
 	logger.Init()
 
-	es, err := loadConfig(*configPath)
+	// Register SIGHUP handler before loading config, so early signals aren't lost.
+	sighupCh := procutil.NewSighupChan()
+
+	configData, err := readConfig(*configPath)
 	if err != nil {
 		logger.Fatalf("cannot load config: %v", err)
 	}
-
-	for _, e := range es {
-		for _, l := range e.groupBy {
-			if l == labelKeyword {
-				protoparser.SetFingerprintLabels(true)
-			}
-		}
+	es, err := newEstimators(*configPath, configData)
+	if err != nil {
+		logger.Fatalf("cannot load config: %v", err)
 	}
+	enableFingerprintLabels(es)
+	activeEstimators.Store(&es)
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -67,7 +68,7 @@ func main() {
 
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
-			writeCardinalityMetrics(w, es, *storageNodes)
+			writeCardinalityMetrics(w, *storageNodes)
 		})
 	}
 
@@ -83,26 +84,29 @@ func main() {
 		cmPath := *cardinalityMetricsExposeAt
 		if cmPath != "/metrics" && cmPath != "" && r.URL.Path == cmPath {
 			w.WriteHeader(http.StatusOK)
-			writeCardinalityMetrics(w, es, *storageNodes)
+			writeCardinalityMetrics(w, *storageNodes)
 			return true
 		}
 		path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
-				if dedup != nil {
-					tss = dedup.filter(tss, tss[:0])
-					if len(tss) == 0 {
-						return
+			var err error
+			withEstimators(func(es []*estimator) {
+				err = protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+					if dedup != nil {
+						tss = dedup.filter(tss, tss[:0])
+						if len(tss) == 0 {
+							return
+						}
 					}
-				}
-				esLen := uint32(len(es))
-				esStart := fastrand.Uint32n(esLen)
-				for j := uint32(0); j < esLen; j++ {
-					idx := (esStart + j) % esLen
-					es[idx].insertMany(tss)
-				}
+					esLen := uint32(len(es))
+					esStart := fastrand.Uint32n(esLen)
+					for j := uint32(0); j < esLen; j++ {
+						idx := (esStart + j) % esLen
+						es[idx].insertMany(tss)
+					}
+				})
 			})
 			if err != nil {
 				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)
@@ -117,7 +121,7 @@ func main() {
 
 			bw := bufio.NewWriterSize(w, 64*1024)
 			enc := gob.NewEncoder(bw)
-			for _, e := range es {
+			for _, e := range getEstimators() {
 				if err := e.toSnapshot(func(s *snapshot) error {
 					return enc.Encode(s)
 				}); err != nil {
@@ -130,18 +134,25 @@ func main() {
 
 			return true
 		case "/reset":
-			for _, e := range es {
+			for _, e := range getEstimators() {
 				e.reset()
 			}
-			cardinalityCacheMu.Lock()
-			globalChurnSnapshots = newChurnSnapshots()
-			cardinalityMetricsCacheAt = time.Time{}
-			cardinalityCacheMu.Unlock()
+			resetChurnCache()
+			w.WriteHeader(http.StatusOK)
+			return true
+		case "/-/reload":
+			if !httpserver.CheckAuthFlag(w, r, reloadAuthKey) {
+				return true
+			}
+			logger.Infof("api config reload was called, sending sighup")
+			procutil.SelfSIGHUP()
 			w.WriteHeader(http.StatusOK)
 			return true
 		}
 		return false
 	}, httpserver.ServeOptions{})
+
+	stopReloader := startReloader(*configPath, configHash(configData), sighupCh, dedup)
 
 	logger.Infof("started vmestimator in %.3f seconds", time.Since(startTime).Seconds())
 
@@ -154,7 +165,8 @@ func main() {
 	if err := httpserver.Stop(listenAddrs); err != nil {
 		logger.Errorf("cannot stop http server: %s", err)
 	}
-	for _, e := range es {
+	stopReloader()
+	for _, e := range getEstimators() {
 		e.stop()
 	}
 	logger.Infof("shutting down vmestimator")

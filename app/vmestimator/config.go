@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metricsql"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 	"gopkg.in/yaml.v2"
@@ -31,7 +30,7 @@ type EstimatorConfig struct {
 	MinCardinality int64             `yaml:"min_cardinality"`
 }
 
-func loadConfig(path string) ([]*estimator, error) {
+func readConfig(path string) ([]byte, error) {
 	if path == "" && len(*storageNodes) > 0 {
 		return nil, nil
 	}
@@ -43,6 +42,14 @@ func loadConfig(path string) ([]*estimator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
 	}
+	return data, nil
+}
+
+func parseEstimatorConfigs(path string, data []byte) ([]EstimatorConfig, error) {
+	if path == "" {
+		return nil, nil
+	}
+
 	var cfg Config
 	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
 		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
@@ -78,7 +85,7 @@ func loadConfig(path string) ([]*estimator, error) {
 		"group_by_keys":   true,
 		"group_by_values": true,
 	}
-	es := make([]*estimator, 0, len(cfg.Streams))
+	ids := make(map[string]struct{}, len(cfg.Streams))
 	for _, ec := range cfg.Streams {
 		for k := range ec.Labels {
 			if reservedLabels[k] {
@@ -88,13 +95,41 @@ func loadConfig(path string) ([]*estimator, error) {
 				return nil, fmt.Errorf("static label name %q is reserved: labels starting with \"by_\" are reserved and cannot be used in labels", k)
 			}
 		}
-		e, err := newEstimator(ec)
+		id := estimatorConfigID(ec)
+		if _, ok := ids[id]; ok {
+			return nil, fmt.Errorf("duplicate estimator config")
+		}
+		ids[id] = struct{}{}
+	}
+
+	return cfg.Streams, nil
+}
+
+// newEstimators builds estimators from the config data read from path.
+// No estimators stay running if an error is returned.
+func newEstimators(path string, data []byte) (es []*estimator, err error) {
+	cfgs, err := parseEstimatorConfigs(path, data)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		for _, e := range es {
+			e.stop()
+		}
+		es = nil
+	}()
+
+	es = make([]*estimator, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		e, err := newEstimator(cfg)
 		if err != nil {
-			logger.Fatalf("cannot create estimator: %v", err)
+			return es, fmt.Errorf("cannot create estimator: %w", err)
 		}
 		es = append(es, e)
 	}
-
 	return es, nil
 }
 

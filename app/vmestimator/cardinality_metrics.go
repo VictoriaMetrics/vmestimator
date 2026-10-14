@@ -35,7 +35,36 @@ var (
 		"Set to 0 to expose all estimates (default 0).")
 )
 
-func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []string) {
+func resetChurnCache() {
+	cardinalityCacheMu.Lock()
+	globalChurnSnapshots = newChurnSnapshots()
+	cardinalityMetricsCacheAt = time.Time{}
+	cardinalityCacheMu.Unlock()
+}
+
+func invalidateCardinalityCache(es []*estimator) {
+	ids := make(map[string]struct{}, len(es))
+	for _, e := range es {
+		ids[e.id] = struct{}{}
+	}
+
+	cardinalityCacheMu.Lock()
+	for k := range globalChurnSnapshots.entries {
+		if _, ok := ids[k.snapshotID]; !ok {
+			delete(globalChurnSnapshots.entries, k)
+		}
+	}
+	cardinalityMetricsCacheAt = time.Time{}
+	cardinalityCacheMu.Unlock()
+}
+
+func writeCardinalityMetrics(w io.Writer, storageNodeURLs []string) {
+	withEstimators(func(es []*estimator) {
+		writeCardinalityMetricsForEstimators(w, es, storageNodeURLs)
+	})
+}
+
+func writeCardinalityMetricsForEstimators(w io.Writer, es []*estimator, storageNodeURLs []string) {
 	startTime := time.Now()
 
 	cardinalityCacheMu.Lock()

@@ -132,6 +132,13 @@ func (d *deduplicator) filter(src, dst []protoparser.TimeSerie) []protoparser.Ti
 	return dst
 }
 
+// Reset drops fingerprints seen by previous estimator generation.
+func (d *deduplicator) Reset() {
+	for i := range d.bfs {
+		d.bfs[i].Store(newDeduplicatorBloomFilter(d.bucketMaxSize))
+	}
+}
+
 func (d *deduplicator) Stop() {
 	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_max_size`)
 	metrics.UnregisterMetric(`vmestimator_deduplication_bloom_filter_size`)
