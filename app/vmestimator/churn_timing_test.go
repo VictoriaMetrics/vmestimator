@@ -21,6 +21,7 @@ func newGlobalChurnSnapshot(churnInterval time.Duration, series ...string) *snap
 		sk.Insert([]byte(s))
 	}
 	return &snapshot{
+		ID:            estimatorID(nil, nil, churnInterval, ""),
 		Interval:      churnInterval,
 		ChurnInterval: churnInterval,
 		Sketches:      map[uint64]SnapshotSketch{0: {Sketch: sk}},
@@ -29,6 +30,7 @@ func newGlobalChurnSnapshot(churnInterval time.Duration, series ...string) *snap
 
 func newGroupedChurnSnapshot(churnInterval time.Duration, groupBy []string, groups ...churnTestGroup) *snapshot {
 	s := &snapshot{
+		ID:            estimatorID(nil, groupBy, churnInterval, ""),
 		Interval:      churnInterval,
 		ChurnInterval: churnInterval,
 		GroupBy:       groupBy,

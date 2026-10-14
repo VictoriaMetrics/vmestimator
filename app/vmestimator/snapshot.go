@@ -4,10 +4,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,18 +24,22 @@ func newSnapshots() *snapshots {
 }
 
 func (ss *snapshots) add(newS *snapshot) {
+	// Snapshots from older vmestimator versions have no ID; generate it from the snapshot fields.
+	if newS.ID == "" {
+		newS.ID = estimatorID(newS.Labels, newS.GroupBy, newS.Interval, newS.Filter)
+	}
+
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	k := newS.key()
-	if s, found := ss.m[k]; found {
+	if s, found := ss.m[newS.ID]; found {
 		s.merge(newS)
 		return
 	}
 
 	s := newSnapshot()
 	s.merge(newS)
-	ss.m[k] = s
+	ss.m[s.ID] = s
 }
 
 func (ss *snapshots) writeMetrics(w io.Writer) error {
@@ -54,6 +56,10 @@ func (ss *snapshots) writeMetrics(w io.Writer) error {
 }
 
 type snapshot struct {
+	// ID is the id of the estimator the snapshot was taken from.
+	// Snapshots with the same ID are merged together.
+	ID string
+
 	Interval      time.Duration
 	ChurnInterval time.Duration
 	Labels        map[string]string
@@ -96,14 +102,8 @@ func decodeSnapshots(r io.Reader, cb func(s *snapshot)) error {
 }
 
 func (s *snapshot) merge(other *snapshot) {
-	if s.GroupBy != nil && !slices.Equal(s.GroupBy, other.GroupBy) {
-		logger.Panicf("BUG: merge snapshots must have the same groupBy; s: %v; other: %v", s.GroupBy, other.GroupBy)
-	}
-	if s.Interval != 0 && s.Interval != other.Interval {
-		logger.Panicf("BUG: merge snapshots must have the same interval; s: %s; other: %s", s.Interval, other.Interval)
-	}
-	if s.Filter != "" && s.Filter != other.Filter {
-		logger.Panicf("BUG: merge snapshots must have the same filter; s: %s; other: %s", s.Filter, other.Filter)
+	if s.ID != "" && s.ID != other.ID {
+		logger.Panicf("BUG: merge snapshots must have the same id; s: %q; other: %q", s.ID, other.ID)
 	}
 
 	for key, otherSSK := range other.Sketches {
@@ -117,6 +117,7 @@ func (s *snapshot) merge(other *snapshot) {
 		}
 	}
 
+	s.ID = other.ID
 	s.Interval = other.Interval
 	if other.ChurnInterval > s.ChurnInterval {
 		s.ChurnInterval = other.ChurnInterval
@@ -262,33 +263,8 @@ func (s *snapshot) writeDroppedMetric(w io.Writer, dropped uint64) error {
 	return nil
 }
 
-func (s *snapshot) key() string {
-	groupByKey := `__global__`
-	if len(s.GroupBy) > 0 {
-		groupByKey = strings.Join(s.GroupBy, ",")
-	}
-
-	var labelsKey string
-	if len(s.Labels) > 0 {
-		keys := make([]string, 0, len(s.Labels))
-		for k := range s.Labels {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var b strings.Builder
-		for _, k := range keys {
-			b.WriteString(k)
-			b.WriteByte('=')
-			b.WriteString(s.Labels[k])
-			b.WriteByte('\x00')
-		}
-		labelsKey = b.String()
-	}
-
-	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, s.Interval, s.Filter)
-}
-
 func (s *snapshot) reset() {
+	s.ID = ""
 	s.GroupLimit = 0
 	s.GroupRejectSize = 0
 	s.Interval = 0
