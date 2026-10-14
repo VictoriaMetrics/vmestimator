@@ -119,9 +119,8 @@ func (s *snapshot) merge(other *snapshot) {
 		}
 	}
 
-	if s.Interval == 0 {
-		// s is empty; take other's value as is, so a negative (no limit) value is preserved.
-		s.MinCardinality = other.MinCardinality
+	if s.MinCardinality < 0 || other.MinCardinality < 0 {
+		s.MinCardinality = -1
 	} else {
 		s.MinCardinality = max(s.MinCardinality, other.MinCardinality)
 	}
