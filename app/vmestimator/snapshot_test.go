@@ -624,200 +624,86 @@ func TestMinCardinalityFilter(t *testing.T) {
 		*cardinalityMetricsMinCardinality = orig
 	}()
 
-	e, err := newEstimator(EstimatorConfig{
-		Interval: time.Minute * 10,
-		GroupBy:  []string{"foo"},
-		Buckets:  3,
-	})
-	if err != nil {
-		t.Fatalf("newEstimator: %v", err)
-	}
-	defer e.stop()
+	// The "low" group has 99 series, the "high" group has 100.
+	f := func(globalMinCardinality uint64, minCardinality int64, lowDropped bool) {
+		t.Helper()
 
-	*cardinalityMetricsMinCardinality = 100
+		*cardinalityMetricsMinCardinality = globalMinCardinality
 
-	// Insert ~10 unique series into "low" group and ~10000 into "high" group.
-	var tss []protoparser.TimeSerie
-	for i := 0; i < 99; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "low"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=low,i=%d", i))),
+		e, err := newEstimator(EstimatorConfig{
+			Interval:       time.Minute * 10,
+			GroupBy:        []string{"foo"},
+			Buckets:        3,
+			MinCardinality: minCardinality,
 		})
-	}
-	for i := 0; i < 100; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "high"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=high,i=%d", i))),
-		})
-	}
-	e.insertMany(tss)
+		if err != nil {
+			t.Fatalf("newEstimator: %v", err)
+		}
+		defer e.stop()
 
-	s := newSnapshot()
-	if err := e.toSnapshot(func(batchS *snapshot) error {
-		s.merge(batchS)
-		return nil
-	}); err != nil {
-		t.Fatalf("toSnapshot: %v", err)
-	}
+		var tss []protoparser.TimeSerie
+		for i := 0; i < 99; i++ {
+			tss = append(tss, protoparser.TimeSerie{
+				Labels: []protoparser.Label{
+					{Name: "foo", Value: "low"},
+					{Name: "i", Value: strconv.Itoa(i)},
+				},
+				Fingerprint: hash([]byte(fmt.Sprintf("foo=low,i=%d", i))),
+			})
+		}
+		for i := 0; i < 100; i++ {
+			tss = append(tss, protoparser.TimeSerie{
+				Labels: []protoparser.Label{
+					{Name: "foo", Value: "high"},
+					{Name: "i", Value: strconv.Itoa(i)},
+				},
+				Fingerprint: hash([]byte(fmt.Sprintf("foo=high,i=%d", i))),
+			})
+		}
+		e.insertMany(tss)
 
-	buf := bytes.NewBuffer(nil)
-	if err := s.writeMetrics(buf); err != nil {
-		t.Fatalf("writeMetrics: %v", err)
-	}
-	out := buf.String()
+		s := newSnapshot()
+		if err := e.toSnapshot(func(batchS *snapshot) error {
+			s.merge(batchS)
+			return nil
+		}); err != nil {
+			t.Fatalf("toSnapshot: %v", err)
+		}
 
-	if strings.Contains(out, `by_foo="low"`) {
-		t.Fatalf("low-cardinality group must be suppressed by minCardinality=100\noutput:\n%s", out)
-	}
-	if !regexp.MustCompile(`by_foo="high"`).MatchString(out) {
-		t.Fatalf("high-cardinality group must be present\noutput:\n%s", out)
-	}
-	if !regexp.MustCompile(`vmestimator_cardinality_estimates_dropped\{[^}]+\} 1`).MatchString(out) {
-		t.Fatalf("dropped metric with count=1 must be present in output\noutput:\n%s", out)
-	}
-}
+		buf := bytes.NewBuffer(nil)
+		if err := s.writeMetrics(buf); err != nil {
+			t.Fatalf("writeMetrics: %v", err)
+		}
+		out := buf.String()
 
-func TestPerStreamMinCardinality(t *testing.T) {
-	orig := *cardinalityMetricsMinCardinality
-	defer func() {
-		*cardinalityMetricsMinCardinality = orig
-	}()
-
-	// Global flag set high — would normally suppress both groups.
-	*cardinalityMetricsMinCardinality = 100
-
-	// Stream with per-stream override of 0 → expose all estimates.
-	zero := uint64(0)
-	e, err := newEstimator(EstimatorConfig{
-		Interval:       time.Minute * 10,
-		GroupBy:        []string{"foo"},
-		Buckets:        3,
-		MinCardinality: &zero,
-	})
-	if err != nil {
-		t.Fatalf("newEstimator: %v", err)
-	}
-	defer e.stop()
-
-	var tss []protoparser.TimeSerie
-	for i := 0; i < 99; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "low"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=low,i=%d", i))),
-		})
-	}
-	for i := 0; i < 100; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "high"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=high,i=%d", i))),
-		})
-	}
-	e.insertMany(tss)
-
-	s := newSnapshot()
-	if err := e.toSnapshot(func(batchS *snapshot) error {
-		s.merge(batchS)
-		return nil
-	}); err != nil {
-		t.Fatalf("toSnapshot: %v", err)
+		if !regexp.MustCompile(`by_foo="high"`).MatchString(out) {
+			t.Fatalf("high-cardinality group must be present; global=%d, per-stream=%d\noutput:\n%s", globalMinCardinality, minCardinality, out)
+		}
+		if lowDropped {
+			if strings.Contains(out, `by_foo="low"`) {
+				t.Fatalf("low-cardinality group must be suppressed; global=%d, per-stream=%d\noutput:\n%s", globalMinCardinality, minCardinality, out)
+			}
+			if !regexp.MustCompile(`vmestimator_cardinality_estimates_dropped\{[^}]+\} 1`).MatchString(out) {
+				t.Fatalf("dropped metric with count=1 must be present; global=%d, per-stream=%d\noutput:\n%s", globalMinCardinality, minCardinality, out)
+			}
+		} else {
+			if !strings.Contains(out, `by_foo="low"`) {
+				t.Fatalf("low-cardinality group must be present; global=%d, per-stream=%d\noutput:\n%s", globalMinCardinality, minCardinality, out)
+			}
+			if strings.Contains(out, "vmestimator_cardinality_estimates_dropped") {
+				t.Fatalf("dropped metric must not be present; global=%d, per-stream=%d\noutput:\n%s", globalMinCardinality, minCardinality, out)
+			}
+		}
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := s.writeMetrics(buf); err != nil {
-		t.Fatalf("writeMetrics: %v", err)
-	}
-	out := buf.String()
-
-	// Per-stream override of 0 should expose BOTH groups despite global=100.
-	if !regexp.MustCompile(`by_foo="low"`).MatchString(out) {
-		t.Fatalf("low-cardinality group must be present with per-stream override=0\noutput:\n%s", out)
-	}
-	if !regexp.MustCompile(`by_foo="high"`).MatchString(out) {
-		t.Fatalf("high-cardinality group must be present\noutput:\n%s", out)
-	}
-	// No dropped metric since per-stream threshold is 0.
-	if strings.Contains(out, "vmestimator_cardinality_estimates_dropped") {
-		t.Fatalf("dropped metric must not be present when per-stream threshold=0\noutput:\n%s", out)
-	}
-}
-
-func TestPerStreamMinCardinalityHigherThanGlobal(t *testing.T) {
-	orig := *cardinalityMetricsMinCardinality
-	defer func() {
-		*cardinalityMetricsMinCardinality = orig
-	}()
-
-	// Global flag set to 0 (expose all).
-	*cardinalityMetricsMinCardinality = 0
-
-	// Stream with per-stream override of 100 → suppress low groups.
-	threshold := uint64(100)
-	e, err := newEstimator(EstimatorConfig{
-		Interval:       time.Minute * 10,
-		GroupBy:        []string{"foo"},
-		Buckets:        3,
-		MinCardinality: &threshold,
-	})
-	if err != nil {
-		t.Fatalf("newEstimator: %v", err)
-	}
-	defer e.stop()
-
-	var tss []protoparser.TimeSerie
-	for i := 0; i < 99; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "low"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=low,i=%d", i))),
-		})
-	}
-	for i := 0; i < 100; i++ {
-		tss = append(tss, protoparser.TimeSerie{
-			Labels: []protoparser.Label{
-				{Name: "foo", Value: "high"},
-				{Name: "i", Value: strconv.Itoa(i)},
-			},
-			Fingerprint: hash([]byte(fmt.Sprintf("foo=high,i=%d", i))),
-		})
-	}
-	e.insertMany(tss)
-
-	s := newSnapshot()
-	if err := e.toSnapshot(func(batchS *snapshot) error {
-		s.merge(batchS)
-		return nil
-	}); err != nil {
-		t.Fatalf("toSnapshot: %v", err)
-	}
-
-	buf := bytes.NewBuffer(nil)
-	if err := s.writeMetrics(buf); err != nil {
-		t.Fatalf("writeMetrics: %v", err)
-	}
-	out := buf.String()
-
-	// Per-stream override of 100 should suppress "low" group despite global=0.
-	if strings.Contains(out, `by_foo="low"`) {
-		t.Fatalf("low-cardinality group must be suppressed by per-stream minCardinality=100\noutput:\n%s", out)
-	}
-	if !regexp.MustCompile(`by_foo="high"`).MatchString(out) {
-		t.Fatalf("high-cardinality group must be present\noutput:\n%s", out)
-	}
-	if !regexp.MustCompile(`vmestimator_cardinality_estimates_dropped\{[^}]+\} 1`).MatchString(out) {
-		t.Fatalf("dropped metric with count=1 must be present\noutput:\n%s", out)
-	}
+	// neither global nor per-stream threshold is set
+	f(0, 0, false)
+	// per-stream lower than global overrides it
+	f(100, 50, false)
+	// per-stream negative disables the threshold
+	f(100, -1, false)
+	// per-stream higher than global overrides it
+	f(0, 100, true)
+	// per-stream zero falls back to global
+	f(100, 0, true)
 }

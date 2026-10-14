@@ -294,8 +294,10 @@ streams:
     # min_cardinality unset → falls back to the global flag
 ```
 
-When `min_cardinality` is set on a stream, it overrides the global flag for that stream only.
-When unset, the global flag value is used.
+When `min_cardinality` is set to a positive value on a stream, it overrides the global flag for that stream only.
+When unset or `0`, the global flag value is used.
+When negative, no threshold is enforced for that stream, even if the global flag is set.
+In cluster mode, `min_cardinality` is taken from the storage nodes' stream configs; if they differ, the select node uses the largest value.
 
 Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`).

@@ -28,7 +28,7 @@ type estimator struct {
 
 	hasLabelKeyword bool
 
-	minCardinality *uint64
+	minCardinality int64
 
 	buckets []*estimatorBucket
 

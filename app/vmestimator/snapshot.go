@@ -63,9 +63,10 @@ type snapshot struct {
 	GroupLimit      int64
 	GroupRejectSize int64
 
-	// MinCardinality, when non-nil, overrides the global
+	// MinCardinality, when positive, overrides the global
 	// -cardinalityMetrics.minCardinality flag for this stream.
-	MinCardinality *uint64
+	// When negative, no threshold is enforced for this stream.
+	MinCardinality int64
 
 	// prom string metric => hll
 	Sketches map[uint64]SnapshotSketch
@@ -121,6 +122,13 @@ func (s *snapshot) merge(other *snapshot) {
 		}
 	}
 
+	if s.Interval == 0 {
+		// s is empty; take other's value as is, so a negative (no limit) value is preserved.
+		s.MinCardinality = other.MinCardinality
+	} else {
+		s.MinCardinality = max(s.MinCardinality, other.MinCardinality)
+	}
+
 	s.Interval = other.Interval
 	if other.ChurnInterval > s.ChurnInterval {
 		s.ChurnInterval = other.ChurnInterval
@@ -136,7 +144,6 @@ func (s *snapshot) merge(other *snapshot) {
 	s.GroupBy = append(s.GroupBy[:0], other.GroupBy...)
 	s.GroupLimit = other.GroupLimit
 	s.GroupRejectSize += other.GroupRejectSize
-	s.MinCardinality = other.MinCardinality
 }
 
 func (s *snapshot) writeMetrics(w io.Writer) error {
@@ -187,8 +194,10 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) (uint64, error) {
 	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
 
 	threshold := *cardinalityMetricsMinCardinality
-	if s.MinCardinality != nil {
-		threshold = *s.MinCardinality
+	if s.MinCardinality > 0 {
+		threshold = uint64(s.MinCardinality)
+	} else if s.MinCardinality < 0 {
+		threshold = 0
 	}
 
 	var dropped uint64
@@ -305,7 +314,7 @@ func (s *snapshot) reset() {
 	s.ChurnInterval = 0
 	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
-	s.MinCardinality = nil
+	s.MinCardinality = 0
 	clear(s.Labels)
 	clear(s.Sketches)
 }
