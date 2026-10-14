@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,6 +23,10 @@ import (
 const labelKeyword = "__label__"
 
 type estimator struct {
+	// id uniquely identifies the estimator by its labels, groupBy, interval and filter.
+	// It is passed to snapshots so they can be merged across vmestimator instances.
+	id string
+
 	groupBy        []string
 	groupSize      *groupSize
 	compiledFilter compiledFilter
@@ -85,6 +90,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e := &estimator{
+		id:              estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter),
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		compiledFilter:  cf,
@@ -144,6 +150,32 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	metrics.RegisterSet(e.metricsSet)
 
 	return e, nil
+}
+
+func estimatorID(labels map[string]string, groupBy []string, interval time.Duration, filter string) string {
+	groupByKey := `__global__`
+	if len(groupBy) > 0 {
+		groupByKey = strings.Join(groupBy, ",")
+	}
+
+	var labelsKey string
+	if len(labels) > 0 {
+		keys := make([]string, 0, len(labels))
+		for k := range labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		for _, k := range keys {
+			b.WriteString(k)
+			b.WriteByte('=')
+			b.WriteString(labels[k])
+			b.WriteByte('\x00')
+		}
+		labelsKey = b.String()
+	}
+
+	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, interval, filter)
 }
 
 func (e *estimator) stop() {
@@ -291,6 +323,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 			eb.mu.Unlock()
 		}
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
+		s.ID = e.id
 		s.Interval = eb0.interval
 		s.ChurnInterval = eb0.churnInterval
 		s.Filter = eb0.filter
@@ -303,6 +336,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	const batchSize = 1000
 
 	eb0 := e.buckets[0]
+	s.ID = e.id
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval

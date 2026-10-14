@@ -405,6 +405,7 @@ func TestGroupSnapshot(t *testing.T) {
 func TestSnapshotsAdd(t *testing.T) {
 	makeSnapshot := func(groupBy []string, filter string, interval time.Duration) *snapshot {
 		s := newSnapshot()
+		s.ID = estimatorID(nil, groupBy, interval, filter)
 		s.Interval = interval
 		s.GroupBy = groupBy
 		s.Filter = filter

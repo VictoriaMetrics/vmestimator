@@ -13,8 +13,8 @@ import (
 )
 
 type churnKey struct {
-	snapshotKey string
-	groupKey    uint64
+	snapshotID string
+	groupKey   uint64
 }
 
 type churnEntry struct {
@@ -52,9 +52,8 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 		logger.Panicf("BUG: update called with snapshot with zero ChurnInterval")
 	}
 
-	snapKey := s.key()
 	for groupKey, ssk := range s.Sketches {
-		k := churnKey{snapshotKey: snapKey, groupKey: groupKey}
+		k := churnKey{snapshotID: s.ID, groupKey: groupKey}
 
 		e, ok := cs.entries[k]
 		if !ok {
