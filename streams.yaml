@@ -1,11 +1,11 @@
 streams:
   - interval: '15m'
-    churn_interval: '15m'
+    calculate_churn: true
 
   - interval: '15m'
-    churn_interval: '15m'
+    calculate_churn: true
     group_by: ["__name__"]
 
   - interval: '15m'
-    churn_interval: '15m'
+    calculate_churn: true
     group_by: ["job"]

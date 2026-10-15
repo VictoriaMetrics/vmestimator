@@ -24,7 +24,7 @@ type EstimatorConfig struct {
 	GroupLimit     int               `yaml:"group_limit"`
 	Labels         map[string]string `yaml:"labels"`
 	Interval       time.Duration     `yaml:"interval"`
-	ChurnInterval  time.Duration     `yaml:"churn_interval"`
+	CalculateChurn bool              `yaml:"calculate_churn"`
 	Buckets        int               `yaml:"buckets"`
 	HLLPrecision   uint8             `yaml:"hll_precision"`
 	HLLSparse      *bool             `yaml:"hll_sparse"`
@@ -73,7 +73,6 @@ func loadConfig(path string) ([]*estimator, error) {
 
 	reservedLabels := map[string]bool{
 		"interval":        true,
-		"churn_interval":  true,
 		"filter":          true,
 		"group_by_keys":   true,
 		"group_by_values": true,

@@ -156,17 +156,16 @@ streams:
     # default: 5m
     interval: <duration>
 
-    # Optional. When set, vmestimator emits a cardinality_churn_ratio metric measuring
+    # Optional. When set to true, vmestimator emits a cardinality_churn_ratio metric measuring
     # how quickly the series set changes within the measurement window.
-    # The look-back comparison window: vmestimator retains a snapshot of the HLL sketch
-    # and replaces it every churn_interval. The churn ratio in [0, 1] is computed as:
+    # vmestimator retains a snapshot of the HLL sketch and replaces it every interval.
+    # The churn ratio in [0, 1] is computed as:
     #   (2*|A∪B| - |A| - |B|) / |A∪B|
     # where A is the retained snapshot and B is the current sketch.
     # A ratio of 0 means the series set is completely stable; 1 means completely replaced.
-    # Must not exceed interval.
     #
-    # default: 0 (churn ratio metric is not emitted)
-    churn_interval: <duration>
+    # default: false (churn ratio metric is not emitted)
+    calculate_churn: <bool>
 
     # Optional. MetricsQL label selector used to pre-filter time series before counting.
     # Only series matching all matchers are counted. Supports equality (=), negative equality (!=),
@@ -389,22 +388,22 @@ Can be narrowed to a specific job: `['job', '__label__']`.
 [High churn](https://docs.victoriametrics.com/victoriametrics/faq/#what-is-high-churn-rate) means many series appear briefly and are replaced by new ones.
 This puts pressure on storage, because each new series must be indexed regardless of how short its lifetime is.
 
-To measure churn, add `churn_interval` to a stream:
+To measure churn, set `calculate_churn: true` on a stream:
 
 ```yaml
 # streams.yaml
 
 - interval: '15m'
-  churn_interval: '15m'
+  calculate_churn: true
   group_by: ['job']
 ```
 
-vmestimator will emit a `cardinality_churn_ratio` metric per group. The value is in `[0, 1]`:
+vmestimator will emit a `cardinality_churn_ratio` metric per group, comparing the series set against a snapshot taken one `interval` earlier. The value is in `[0, 1]`:
 - `0` — the series set is completely stable; the same series were active across both windows.
 - `1` — complete churn; entirely different series appeared in the latest window.
 
 ```
-cardinality_churn_ratio{interval="15m0s",churn_interval="15m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.1200
+cardinality_churn_ratio{interval="15m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.1200
 ```
 
 This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
@@ -423,11 +422,11 @@ They require the following stream configuration to also support churn detection:
 
 # Global stream — required for GlobalChurnTooHigh and GlobalCardinalityTooHigh.
 - interval: '15m'
-  churn_interval: '15m'
+  calculate_churn: true
 
 # Per-job stream — required for JobChurnTooHigh and JobCardinalityTooHigh.
 - interval: '15m'
-  churn_interval: '15m'
+  calculate_churn: true
   group_by: ['job']
 ```
 

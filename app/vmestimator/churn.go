@@ -19,12 +19,11 @@ type churnKey struct {
 
 type churnEntry struct {
 	// metadata for writing metrics
-	interval      time.Duration
-	churnInterval time.Duration
-	filter        string
-	labels        map[string]string
-	groupBy       []string
-	values        []string // group label values for this groupKey
+	interval time.Duration
+	filter   string
+	labels   map[string]string
+	groupBy  []string
+	values   []string // group label values for this groupKey
 
 	prev *churnSketch
 	curr *churnSketch
@@ -36,7 +35,7 @@ type churnSketch struct {
 }
 
 // churnSnapshots holds prev and curr sketch baselines per (snapshotKey, groupKey).
-// When prev.addedAt < now-churnInterval, prev is reset to curr.
+// When prev.addedAt < now-interval, prev is reset to curr.
 type churnSnapshots struct {
 	entries map[churnKey]*churnEntry
 }
@@ -46,10 +45,13 @@ func newChurnSnapshots() *churnSnapshots {
 }
 
 // update accepts a single snapshot and upserts one churnEntry per group sketch.
-// Panics if s.ChurnInterval is zero.
+// Panics if s.CalculateChurn is false or s.Interval is zero.
 func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
-	if s.ChurnInterval == 0 {
-		logger.Panicf("BUG: update called with snapshot with zero ChurnInterval")
+	if !s.CalculateChurn {
+		logger.Panicf("BUG: update called with snapshot with disabled CalculateChurn")
+	}
+	if s.Interval == 0 {
+		logger.Panicf("BUG: update called with snapshot with zero Interval")
 	}
 
 	for groupKey, ssk := range s.Sketches {
@@ -58,11 +60,10 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 		e, ok := cs.entries[k]
 		if !ok {
 			e = &churnEntry{
-				interval:      s.Interval,
-				churnInterval: s.ChurnInterval,
-				filter:        s.Filter,
-				groupBy:       append([]string{}, s.GroupBy...),
-				values:        append([]string{}, ssk.Values...),
+				interval: s.Interval,
+				filter:   s.Filter,
+				groupBy:  append([]string{}, s.GroupBy...),
+				values:   append([]string{}, ssk.Values...),
 			}
 			if len(s.Labels) > 0 {
 				e.labels = make(map[string]string, len(s.Labels))
@@ -83,7 +84,7 @@ func (cs *churnSnapshots) update(s *snapshot, now time.Time) {
 			// now, but churnRatio returns 0 until the first real rotation.
 			e.prev = &churnSketch{addedAt: now, sketch: nil}
 			e.curr = newSK
-		} else if e.prev.addedAt.Before(now.Add(-s.ChurnInterval)) {
+		} else if e.prev.addedAt.Before(now.Add(-s.Interval)) {
 			e.prev = &churnSketch{addedAt: now, sketch: e.curr.sketch}
 			e.curr = newSK
 		} else {
@@ -106,7 +107,7 @@ func (cs *churnSnapshots) cleanup(now time.Time) {
 func (cs *churnSnapshots) writeMetrics(w io.Writer) error {
 	buf := make([]byte, 0, 256)
 	for _, e := range cs.entries {
-		metricPrefixB := appendChurnMetricPrefix(make([]byte, 0, 128), e.labels, e.interval, e.churnInterval, e.filter)
+		metricPrefixB := appendChurnMetricPrefix(make([]byte, 0, 128), e.labels, e.interval, e.filter)
 		metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 		rate := churnRatio(e)
@@ -156,12 +157,10 @@ func churnRatio(e *churnEntry) float64 {
 }
 
 // appendChurnMetricPrefix produces:
-// 'cardinality_churn_ratio{interval="5m",churn_interval="15m",filter=""'
-func appendChurnMetricPrefix(buf []byte, labels map[string]string, interval, churnInterval time.Duration, filter string) []byte {
+// 'cardinality_churn_ratio{interval="5m",filter=""'
+func appendChurnMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter string) []byte {
 	buf = append(buf, `cardinality_churn_ratio{interval=`...)
 	buf = strconv.AppendQuote(buf, interval.String())
-	buf = append(buf, `,churn_interval=`...)
-	buf = strconv.AppendQuote(buf, churnInterval.String())
 	buf = append(buf, `,filter=`...)
 	buf = strconv.AppendQuote(buf, filter)
 

@@ -15,26 +15,26 @@ type churnTestGroup struct {
 	series []string
 }
 
-func newGlobalChurnSnapshot(churnInterval time.Duration, series ...string) *snapshot {
+func newGlobalChurnSnapshot(interval time.Duration, series ...string) *snapshot {
 	sk := mustNewSketch(14, true)
 	for _, s := range series {
 		sk.Insert([]byte(s))
 	}
 	return &snapshot{
-		ID:            estimatorID(nil, nil, churnInterval, ""),
-		Interval:      churnInterval,
-		ChurnInterval: churnInterval,
-		Sketches:      map[uint64]SnapshotSketch{0: {Sketch: sk}},
+		ID:             estimatorID(nil, nil, interval, ""),
+		Interval:       interval,
+		CalculateChurn: true,
+		Sketches:       map[uint64]SnapshotSketch{0: {Sketch: sk}},
 	}
 }
 
-func newGroupedChurnSnapshot(churnInterval time.Duration, groupBy []string, groups ...churnTestGroup) *snapshot {
+func newGroupedChurnSnapshot(interval time.Duration, groupBy []string, groups ...churnTestGroup) *snapshot {
 	s := &snapshot{
-		ID:            estimatorID(nil, groupBy, churnInterval, ""),
-		Interval:      churnInterval,
-		ChurnInterval: churnInterval,
-		GroupBy:       groupBy,
-		Sketches:      make(map[uint64]SnapshotSketch, len(groups)),
+		ID:             estimatorID(nil, groupBy, interval, ""),
+		Interval:       interval,
+		CalculateChurn: true,
+		GroupBy:        groupBy,
+		Sketches:       make(map[uint64]SnapshotSketch, len(groups)),
 	}
 	for _, g := range groups {
 		sk := mustNewSketch(14, true)
@@ -90,7 +90,7 @@ func TestChurnSnapshots_Group_OneInserted(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
 		)
 	})
 }
@@ -115,7 +115,7 @@ func TestChurnSnapshots_Group_TwoInserted_ZeroChurn(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
 		)
 	})
 }
@@ -140,7 +140,7 @@ func TestChurnSnapshots_Group_TwoInserted_FiftyPercentChurn(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.5000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.5000`,
 		)
 	})
 }
@@ -165,7 +165,7 @@ func TestChurnSnapshots_Group_TwoInserted_HundredPercentChurn(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 1.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 1.0000`,
 		)
 	})
 }
@@ -191,7 +191,7 @@ func TestChurnSnapshots_Group_ThreeInserted_PrevReplaced(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 1.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 1.0000`,
 		)
 		time.Sleep(interval + time.Second)
 
@@ -201,7 +201,7 @@ func TestChurnSnapshots_Group_ThreeInserted_PrevReplaced(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000`,
 		)
 	})
 }
@@ -231,8 +231,8 @@ func TestChurnSnapshots_SeveralGroups(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000
-cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="job",group_by_values="worker",by_job="worker"} 1.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="api",by_job="api"} 0.0000
+cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="job",group_by_values="worker",by_job="worker"} 1.0000`,
 		)
 	})
 }
@@ -254,7 +254,7 @@ func TestChurnSnapshots_Global_EmptyPrevWindow_HundredPercentChurn(t *testing.T)
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="__global__"} 1.0000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="__global__"} 1.0000`,
 		)
 	})
 }
@@ -265,7 +265,7 @@ func TestChurnSnapshots_Cleanup(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cs := newChurnSnapshots()
 		interval := time.Minute
-		expMetric := `cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="__global__"} 0.0000`
+		expMetric := `cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="__global__"} 0.0000`
 
 		cs.update(newGlobalChurnSnapshot(interval, "s1", "s2"), time.Now())
 
@@ -300,7 +300,7 @@ func TestChurnSnapshots_Global(t *testing.T) {
 		assertChurnMetrics(
 			t,
 			writeChurnMetrics(t, cs),
-			`cardinality_churn_ratio{interval="1m0s",churn_interval="1m0s",filter="",group_by_keys="__global__"} 0.5000`,
+			`cardinality_churn_ratio{interval="1m0s",filter="",group_by_keys="__global__"} 0.5000`,
 		)
 	})
 }
