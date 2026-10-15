@@ -213,10 +213,10 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 	return true, nil
 }
 
-// startReloader re-reads the config at path on every sighupCh event and every -configCheckInterval,
+// startConfigReloader re-reads the config at path on every sighupCh event and every -configCheckInterval,
 // and loads it if its contents differ from cfg. The previous config stays active on error.
 // The returned function stops the reloader and waits for it to exit.
-func startReloader(path string, cfg *Config, sighupCh <-chan os.Signal, dedup *deduplicator) (stop func()) {
+func startConfigReloader(path string, cfg *Config, sighupCh <-chan os.Signal, dedup *deduplicator) (stop func()) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 

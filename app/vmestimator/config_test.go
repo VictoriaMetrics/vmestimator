@@ -108,11 +108,11 @@ streams:
 		configSuccess.Set(-1)
 
 		sighupCh := make(chan os.Signal)
-		stop := startReloader(path, cfg, sighupCh, nil)
+		stopReloader := startConfigReloader(path, cfg, sighupCh, nil)
 		writeConfig(next)
 		sighupCh <- nil
-		// stop waits until the reloader handles the received signal.
-		stop()
+		// stopReloader waits until the reloader handles the received signal.
+		stopReloader()
 
 		if got := configSuccess.Get(); got != wantSuccess {
 			t.Fatalf("unexpected vmestimator_config_last_reload_successful; got %v; want %v", got, wantSuccess)

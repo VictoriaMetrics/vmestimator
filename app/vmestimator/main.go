@@ -172,7 +172,11 @@ func main() {
 		return false
 	}, httpserver.ServeOptions{})
 
-	stopReloader := startReloader(*configPath, cfg, sighupCh, dedup)
+	// There is nothing to reload when only -storageNode is set.
+	stopReloader := func() {}
+	if *configPath != "" {
+		stopReloader = startConfigReloader(*configPath, cfg, sighupCh, dedup)
+	}
 
 	logger.Infof("started vmestimator in %.3f seconds", time.Since(startTime).Seconds())
 
