@@ -252,7 +252,13 @@ streams:
 * HTTP request to `/-/reload`. Protect it with `-reloadAuthKey`, passed via the `authKey` query arg.
 * Every `-configCheckInterval`, if the flag is set.
 
-If the file content is unchanged, nothing happens. Otherwise all streams are recreated: **accumulated estimates, churn state, and deduplication state are dropped**.
+If the file content is unchanged, nothing happens. Otherwise the new config is applied stream by stream:
+
+* Streams with unchanged settings keep their accumulated estimates and churn state. The order of streams in the file doesn't matter.
+* Added streams and streams with any changed setting (e.g. `group_limit` or `hll_precision`) start with empty estimates.
+* Removed streams are stopped and their estimates are no longer exposed.
+
+If any stream is added or changed, the deduplication state is reset, so the new streams receive all the series.
 If the new config is invalid, the error is logged and the previous config stays active.
 
 Reload status is exposed via `vmestimator_config_reloads_total`, `vmestimator_config_reloads_errors_total`,
