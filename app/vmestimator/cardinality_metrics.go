@@ -35,13 +35,6 @@ var (
 		"Set to 0 to expose all estimates (default 0).")
 )
 
-func resetChurnCache() {
-	cardinalityCacheMu.Lock()
-	globalChurnSnapshots = newChurnSnapshots()
-	cardinalityMetricsCacheAt = time.Time{}
-	cardinalityCacheMu.Unlock()
-}
-
 // invalidateCardinalityCache drops churn state of the removed estimators keyed by id and resets the cardinality metrics cache.
 // Churn state of other snapshots, including the ones fetched from -storageNode, is preserved.
 func invalidateCardinalityCache(removed map[string]*estimator) {

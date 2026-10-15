@@ -154,7 +154,10 @@ func main() {
 			for _, e := range getEstimators() {
 				e.reset()
 			}
-			resetChurnCache()
+			cardinalityCacheMu.Lock()
+			globalChurnSnapshots = newChurnSnapshots()
+			cardinalityMetricsCacheAt = time.Time{}
+			cardinalityCacheMu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			return true
 		case "/-/reload":
