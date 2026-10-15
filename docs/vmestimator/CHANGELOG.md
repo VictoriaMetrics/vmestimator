@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+**Update Note 1:** [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): vmestimator now refuses to start if the `-config` file contains streams with identical `labels`, `group_by`, `interval` and `filter`. Such streams produce identical time series, so differences in other fields (`group_limit`, `buckets`, `hll_precision`, `hll_sparse`, `churn_interval`, `min_cardinality`) were ambiguous. The `group_by` order is ignored, and an omitted `interval` is treated as the default `5m`. Before upgrading, merge or remove duplicate streams in the config.
+
 * SECURITY: upgrade Go builder from Go1.26.6 to Go1.27.2. See [the list of issues addressed in Go1.27.2](https://github.com/golang/go/issues?q=milestone%3AGo1.27.2%20label%3ACherryPickApproved).
 
 * FEATURE: [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards): add "Trend" section with a long-term cardinality overview (90 days). Add dedicated "Global Churn %" and "Global Churn" (absolute) panels. Add "Top 10 Churn %" panel per group_by_keys. Remove the `instance` variable.

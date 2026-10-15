@@ -79,7 +79,8 @@ func loadConfig(path string) ([]*estimator, error) {
 		"group_by_values": true,
 	}
 	es := make([]*estimator, 0, len(cfg.Streams))
-	for _, ec := range cfg.Streams {
+	ids := make(map[string]int, len(cfg.Streams))
+	for i, ec := range cfg.Streams {
 		for k := range ec.Labels {
 			if reservedLabels[k] {
 				return nil, fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
@@ -92,6 +93,11 @@ func loadConfig(path string) ([]*estimator, error) {
 		if err != nil {
 			logger.Fatalf("cannot create estimator: %v", err)
 		}
+		// Streams with the same labels, group_by, interval and filter produce identical time series.
+		if j, ok := ids[e.id]; ok {
+			return nil, fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
+		}
+		ids[e.id] = i
 		es = append(es, e)
 	}
 
