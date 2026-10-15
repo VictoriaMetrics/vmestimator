@@ -271,7 +271,9 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			}
 
 			if label.Fingerprint == 0 {
-				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
+				// Label fingerprints are missing for requests parsed before a config reload
+				// enabled them via protoparser.SetFingerprintLabels; skip such labels.
+				continue
 			}
 			_, _ = ld.WriteString(label.Name)
 			groupValues[labelIdx] = label.Name
