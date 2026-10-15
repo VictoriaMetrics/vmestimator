@@ -1,10 +1,69 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
 )
+
+func TestLoadConfigUniqueIDs(t *testing.T) {
+	f := func(cfg string, wantErr bool) {
+		t.Helper()
+
+		path := filepath.Join(t.TempDir(), "streams.yaml")
+		if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
+			t.Fatalf("cannot write config: %s", err)
+		}
+		es, err := loadConfig(path)
+		for _, e := range es {
+			e.stop()
+		}
+		if (err != nil) != wantErr {
+			t.Fatalf("unexpected error: got %v; want error: %v", err, wantErr)
+		}
+	}
+
+	// different group_by
+	f(`
+streams:
+- group_by: [job]
+- group_by: [instance]
+`, false)
+
+	// different labels
+	f(`
+streams:
+- labels: {a: "1"}
+- labels: {a: "2"}
+`, false)
+
+	// same id, only non-id fields differ
+	f(`
+streams:
+- group_by: [job]
+  group_limit: 10
+- group_by: [job]
+  group_limit: 20
+`, true)
+
+	// same id, group_by order differs
+	f(`
+streams:
+- group_by: [job, instance]
+- group_by: [instance, job]
+`, true)
+
+	// same id, default interval equals explicit one
+	f(`
+streams:
+- filter: '{job="a"}'
+- filter: '{job="a"}'
+  interval: 5m
+  min_cardinality: 10
+`, true)
+}
 
 func TestCompiledFilterMatch(t *testing.T) {
 	labels := func(pairs ...string) []protoparser.Label {

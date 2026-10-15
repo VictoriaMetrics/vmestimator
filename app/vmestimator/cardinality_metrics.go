@@ -75,7 +75,7 @@ func writeCardinalityMetricsForEstimators(w io.Writer, es []*estimator, storageN
 			e.writeMetrics(plain)
 		}
 		for _, e := range es {
-			if e.buckets[0].churnInterval > 0 {
+			if e.buckets[0].calculateChurn {
 				if err := e.toSnapshot(func(s *snapshot) error {
 					globalChurnSnapshots.update(s, now)
 					return nil
@@ -104,7 +104,7 @@ func writeCardinalityMetricsForEstimators(w io.Writer, es []*estimator, storageN
 			// compare a full-cluster sketch against an incomplete one next scrape.
 			if !fetchFailed.Load() {
 				for _, s := range ss.m {
-					if s.ChurnInterval > 0 {
+					if s.CalculateChurn {
 						globalChurnSnapshots.update(s, now)
 					}
 				}

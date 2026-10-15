@@ -23,7 +23,7 @@ type EstimatorConfig struct {
 	GroupLimit     int               `yaml:"group_limit"`
 	Labels         map[string]string `yaml:"labels"`
 	Interval       time.Duration     `yaml:"interval"`
-	ChurnInterval  time.Duration     `yaml:"churn_interval"`
+	CalculateChurn bool              `yaml:"calculate_churn"`
 	Buckets        int               `yaml:"buckets"`
 	HLLPrecision   uint8             `yaml:"hll_precision"`
 	HLLSparse      *bool             `yaml:"hll_sparse"`
@@ -80,13 +80,13 @@ func parseEstimatorConfigs(path string, data []byte) ([]EstimatorConfig, error) 
 
 	reservedLabels := map[string]bool{
 		"interval":        true,
-		"churn_interval":  true,
 		"filter":          true,
 		"group_by_keys":   true,
 		"group_by_values": true,
 	}
-	ids := make(map[string]struct{}, len(cfg.Streams))
-	for _, ec := range cfg.Streams {
+	es := make([]*estimator, 0, len(cfg.Streams))
+	ids := make(map[string]int, len(cfg.Streams))
+	for i, ec := range cfg.Streams {
 		for k := range ec.Labels {
 			if reservedLabels[k] {
 				return nil, fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
@@ -99,7 +99,7 @@ func parseEstimatorConfigs(path string, data []byte) ([]EstimatorConfig, error) 
 		if _, ok := ids[id]; ok {
 			return nil, fmt.Errorf("duplicate estimator config")
 		}
-		ids[id] = struct{}{}
+		ids[id] = i
 	}
 
 	return cfg.Streams, nil
@@ -128,6 +128,11 @@ func newEstimators(path string, data []byte) (es []*estimator, err error) {
 		if err != nil {
 			return es, fmt.Errorf("cannot create estimator: %w", err)
 		}
+		// Streams with the same labels, group_by, interval and filter produce identical time series.
+		if j, ok := ids[e.id]; ok {
+			return nil, fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
+		}
+		ids[e.id] = i
 		es = append(es, e)
 	}
 	return es, nil

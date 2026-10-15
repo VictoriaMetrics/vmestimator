@@ -60,10 +60,10 @@ type snapshot struct {
 	// Snapshots with the same ID are merged together.
 	ID string
 
-	Interval      time.Duration
-	ChurnInterval time.Duration
-	Labels        map[string]string
-	Filter        string
+	Interval       time.Duration
+	CalculateChurn bool
+	Labels         map[string]string
+	Filter         string
 
 	GroupBy         []string
 	GroupLimit      int64
@@ -127,9 +127,7 @@ func (s *snapshot) merge(other *snapshot) {
 
 	s.ID = other.ID
 	s.Interval = other.Interval
-	if other.ChurnInterval > s.ChurnInterval {
-		s.ChurnInterval = other.ChurnInterval
-	}
+	s.CalculateChurn = s.CalculateChurn || other.CalculateChurn
 	s.Filter = other.Filter
 	for k, v := range other.Labels {
 		if s.Labels == nil {
@@ -283,7 +281,7 @@ func (s *snapshot) reset() {
 	s.GroupLimit = 0
 	s.GroupRejectSize = 0
 	s.Interval = 0
-	s.ChurnInterval = 0
+	s.CalculateChurn = false
 	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
 	s.MinCardinality = 0

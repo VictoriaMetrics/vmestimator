@@ -46,10 +46,6 @@ type estimator struct {
 func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	applyEstimatorDefaults(&cfg)
 
-	if cfg.ChurnInterval > cfg.Interval {
-		return nil, fmt.Errorf("churn_interval %s must not exceed interval %s", cfg.ChurnInterval, cfg.Interval)
-	}
-
 	if len(cfg.GroupBy) > 5 {
 		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
 	}
@@ -104,9 +100,9 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 			groupSize:     e.groupSize,
 			groupBy:       cfg.GroupBy,
 			interval:      cfg.Interval,
-			churnInterval: cfg.ChurnInterval,
-			labels:        cfg.Labels,
-			filter:        cfg.Filter,
+			calculateChurn: cfg.CalculateChurn,
+			labels:         cfg.Labels,
+			filter:         cfg.Filter,
 
 			precision:       cfg.HLLPrecision,
 			sparse:          *cfg.HLLSparse,
@@ -334,7 +330,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
 		s.ID = e.id
 		s.Interval = eb0.interval
-		s.ChurnInterval = eb0.churnInterval
+		s.CalculateChurn = eb0.calculateChurn
 		s.Filter = eb0.filter
 		s.Labels = eb0.labels
 		s.GroupBy = nil
@@ -349,7 +345,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval
-	s.ChurnInterval = eb0.churnInterval
+	s.CalculateChurn = eb0.calculateChurn
 	s.Filter = eb0.filter
 	s.Labels = eb0.labels
 	s.MinCardinality = e.minCardinality
@@ -483,7 +479,7 @@ type estimatorBucket struct {
 	idx             int
 	groupBy         []string
 	interval        time.Duration
-	churnInterval   time.Duration
+	calculateChurn  bool
 	filter          string
 	precision       uint8
 	sparse          bool
