@@ -16,6 +16,10 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+## [v0.1.17](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.17)
+
+Released at 2027-10-15
+
 **Update Note 1:** [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): vmestimator now refuses to start if the `-config` file contains streams with identical `labels`, `group_by`, `interval` and `filter`. Such streams produce identical time series, so differences in other fields (`group_limit`, `buckets`, `hll_precision`, `hll_sparse`, `calculate_churn`, `min_cardinality`) were ambiguous. The `group_by` order is ignored, and an omitted `interval` is treated as the default `5m`. Before upgrading, merge or remove duplicate streams in the config.
 
 **Update Note 2:** [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): the `churn_interval` stream config option is replaced with `calculate_churn: true`. Churn is now always calculated over the stream `interval`, and the `churn_interval` label is removed from `cardinality_churn_ratio` metrics. Configs that still contain `churn_interval` fail to load. Before upgrading, replace `churn_interval: <duration>` with `calculate_churn: true` and update queries that rely on the `churn_interval` label. In cluster mode, upgrade all nodes together: snapshots from older storage nodes do not carry the churn flag, so churn is not reported for them until they are upgraded.
