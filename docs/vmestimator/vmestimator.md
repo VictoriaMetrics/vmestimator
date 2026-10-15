@@ -205,6 +205,14 @@ streams:
     # default: 10000
     group_limit: <integer>
 
+    # Optional. Minimum cardinality estimate to expose for group_by streams.
+    # When positive, overrides the global -cardinalityMetrics.minCardinality flag for this stream only.
+    # When zero, the global flag value is used.
+    # When negative, no threshold is enforced for this stream.
+    #
+    # default: 0
+    min_cardinality: <integer>
+
     # Optional. Number of shards used to reduce lock contention during parallel ingestion.
     # Slightly increases memory for global streams (no group_by); negligible otherwise.
     # Leave at the default unless you have profiled lock contention or have a specific reason to change it.
@@ -279,6 +287,26 @@ This is controlled by the `-cardinalityMetrics.exposeAt` flag:
 Use `-cardinalityMetrics.minCardinality=N` to suppress group-by cardinality estimates below `N`.
 This is useful when `group_by` produces many low-cardinality groups that add noise without actionable signal.
 When groups are suppressed, the `vmestimator_cardinality_estimates_dropped` metric reports the number of dropped groups per stream.
+
+The global flag applies the same threshold to every stream. To override it per stream — for example to
+keep low-cardinality estimates from a `__label__` stream while suppressing noise from high-cardinality
+streams — set the `min_cardinality` field on individual streams:
+
+```yaml
+streams:
+  - group_by: [__name__, job, region]
+    interval: 5m
+    min_cardinality: 1000
+
+  - group_by: [__label__]
+    interval: 5m
+    # min_cardinality unset → falls back to the global flag
+```
+
+When `min_cardinality` is set to a positive value on a stream, it overrides the global flag for that stream only.
+When unset or `0`, the global flag value is used.
+When negative, no threshold is enforced for that stream, even if the global flag is set.
+In cluster mode, `min_cardinality` is taken from the storage nodes' stream configs; if they differ, the select node uses the largest value.
 
 Computing cardinality estimates is expensive, so results are cached.
 Cache duration is controlled by `-cardinalityMetrics.cacheTTL` (default: `30s`).

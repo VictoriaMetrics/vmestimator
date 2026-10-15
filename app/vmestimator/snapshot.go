@@ -69,6 +69,8 @@ type snapshot struct {
 	GroupLimit      int64
 	GroupRejectSize int64
 
+	MinCardinality int64
+
 	// prom string metric => hll
 	Sketches map[uint64]SnapshotSketch
 }
@@ -115,6 +117,12 @@ func (s *snapshot) merge(other *snapshot) {
 				Sketch: otherSSK.Sketch.Clone(),
 			}
 		}
+	}
+
+	if s.MinCardinality < 0 || other.MinCardinality < 0 {
+		s.MinCardinality = -1
+	} else {
+		s.MinCardinality = max(s.MinCardinality, other.MinCardinality)
 	}
 
 	s.ID = other.ID
@@ -182,10 +190,17 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) (uint64, error) {
 	groupByKeysLabelB := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_keys`, s.GroupBy)
 	groupByKeysLabel := bytesutil.ToUnsafeString(groupByKeysLabelB)
 
+	threshold := *cardinalityMetricsMinCardinality
+	if s.MinCardinality > 0 {
+		threshold = uint64(s.MinCardinality)
+	} else if s.MinCardinality < 0 {
+		threshold = 0
+	}
+
 	var dropped uint64
 	for _, ssk := range s.Sketches {
 		estimate := ssk.Sketch.Estimate()
-		if estimate < *cardinalityMetricsMinCardinality {
+		if estimate < threshold {
 			dropped++
 			continue
 		}
@@ -271,6 +286,7 @@ func (s *snapshot) reset() {
 	s.ChurnInterval = 0
 	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
+	s.MinCardinality = 0
 	clear(s.Labels)
 	clear(s.Sketches)
 }
