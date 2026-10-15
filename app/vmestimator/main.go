@@ -40,6 +40,14 @@ func getEstimators() []*estimator {
 	return es
 }
 
+// isAuthKeyProtectedPath returns true for paths verifying the corresponding -*AuthKey flag on their own,
+// so httpserver skips -httpAuth.* checks for them.
+// It must match paths the same way as the request handler in main.
+func isAuthKeyProtectedPath(r *http.Request) bool {
+	path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
+	return path == "/-/reload"
+}
+
 func main() {
 	envflag.Parse()
 	buildinfo.Init()
@@ -88,6 +96,8 @@ func main() {
 
 	logger.Infof("starting vmestimator at %q", listenAddrs)
 	startTime := time.Now()
+
+	httpserver.RegisterAuthKeyProtectedPathsFunc(isAuthKeyProtectedPath)
 
 	go httpserver.Serve(listenAddrs, func(w http.ResponseWriter, r *http.Request) bool {
 		cmPath := *cardinalityMetricsExposeAt

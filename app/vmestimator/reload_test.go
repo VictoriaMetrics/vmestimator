@@ -45,7 +45,7 @@ func TestInvalidateCardinalityCache(t *testing.T) {
 	}
 	cardinalityMetricsCacheAt = time.Now()
 
-	invalidateCardinalityCache([]*estimator{keep})
+	invalidateCardinalityCache(map[string]*estimator{remove.id: remove})
 
 	if len(globalChurnSnapshots.entries) != 1 {
 		t.Fatalf("churn entries = %d; want 1", len(globalChurnSnapshots.entries))

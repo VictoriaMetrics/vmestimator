@@ -26,6 +26,9 @@ type estimator struct {
 	// It is passed to snapshots so they can be merged across vmestimator instances.
 	id string
 
+	// cfg is the config the estimator was created from.
+	cfg EstimatorConfig
+
 	groupBy        []string
 	groupSize      *groupSize
 	compiledFilter compiledFilter
@@ -71,6 +74,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	e := &estimator{
 		id:              estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter),
+		cfg:             cfg,
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		compiledFilter:  cf,

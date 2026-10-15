@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -106,6 +107,10 @@ type EstimatorConfig struct {
 }
 
 func (ec *EstimatorConfig) applyDefaults() {
+	if len(ec.Labels) == 0 {
+		// Normalize `labels: {}` to nil, so it equals to missing labels on config comparison.
+		ec.Labels = nil
+	}
 	if ec.Interval == 0 {
 		ec.Interval = 5 * time.Minute
 	}
@@ -151,8 +156,8 @@ func readConfig(path string) (*Config, error) {
 
 // loadConfig applies cfg to the active estimators.
 //
-// Active estimators with the same id as a configured stream are reused with their state,
-// missing ones are created and the ones absent in the config are stopped.
+// Active estimators with the same config as a configured stream are reused with their state,
+// missing or changed ones are created and the ones absent in the config are stopped.
 // It returns false if the set of estimators didn't change; stream order is ignored.
 // Active estimators are left untouched if an error is returned.
 func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
@@ -165,7 +170,8 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 	var created []*estimator
 	for _, ec := range cfg.Streams {
 		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter)
-		if e := removed[id]; e != nil {
+		// An estimator with changed settings is re-created, since its state depends on them.
+		if e := removed[id]; e != nil && reflect.DeepEqual(e.cfg, ec) {
 			es = append(es, e)
 			delete(removed, id)
 			continue
@@ -201,7 +207,7 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 		e.stop()
 	}
 
-	invalidateCardinalityCache(es)
+	invalidateCardinalityCache(removed)
 
 	return true, nil
 }
