@@ -197,12 +197,13 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 			break
 		}
 	}
-	if dedup != nil {
-		// New estimators must see series the deduplicator already passed to the previous ones.
-		dedup.Reset()
-	}
 	// In-flight requests may still insert into removed estimators; this is harmless.
 	estimators.Store(es)
+	if dedup != nil && len(created) > 0 {
+		// New estimators must see series the deduplicator already passed to the previous ones.
+		// Reset after the swap, so series passed after the reset reach the new estimators.
+		dedup.Reset()
+	}
 	for _, e := range removed {
 		e.stop()
 	}
