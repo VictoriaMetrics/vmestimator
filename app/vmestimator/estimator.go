@@ -14,7 +14,6 @@ import (
 	"github.com/dgryski/go-metro"
 	"github.com/valyala/fastrand"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
@@ -26,6 +25,9 @@ type estimator struct {
 	// id uniquely identifies the estimator by its labels, groupBy, interval and filter.
 	// It is passed to snapshots so they can be merged across vmestimator instances.
 	id string
+
+	// cfg is the config the estimator was created from.
+	cfg EstimatorConfig
 
 	groupBy        []string
 	groupSize      *groupSize
@@ -44,22 +46,7 @@ type estimator struct {
 }
 
 func newEstimator(cfg EstimatorConfig) (*estimator, error) {
-	if cfg.Interval == 0 {
-		cfg.Interval = time.Minute * 5
-	}
-	if cfg.GroupLimit <= 0 {
-		cfg.GroupLimit = 10000
-	}
-	if cfg.Buckets <= 0 {
-		buckets := min(64, 2*cgroup.AvailableCPUs())
-		cfg.Buckets = max(4, buckets)
-	}
-	if cfg.HLLPrecision == 0 {
-		cfg.HLLPrecision = 14
-	}
-	if cfg.HLLSparse == nil {
-		cfg.HLLSparse = new(true)
-	}
+	cfg.applyDefaults()
 
 	if len(cfg.GroupBy) > 5 {
 		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
@@ -87,6 +74,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	e := &estimator{
 		id:              estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter),
+		cfg:             cfg,
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
 		compiledFilter:  cf,
@@ -111,10 +99,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	for i := 0; i < len(e.buckets); i++ {
 		eb := &estimatorBucket{
-			idx:           i,
-			groupSize:     e.groupSize,
-			groupBy:       cfg.GroupBy,
-			interval:      cfg.Interval,
+			idx:            i,
+			groupSize:      e.groupSize,
+			groupBy:        cfg.GroupBy,
+			interval:       cfg.Interval,
 			calculateChurn: cfg.CalculateChurn,
 			labels:         cfg.Labels,
 			filter:         cfg.Filter,
@@ -176,7 +164,7 @@ func estimatorID(labels map[string]string, groupBy []string, interval time.Durat
 
 func (e *estimator) stop() {
 	close(e.stopCh)
-	e.metricsSet.UnregisterAllMetrics()
+	metrics.UnregisterSet(e.metricsSet, true)
 }
 
 var formatBufPool = sync.Pool{}
@@ -283,7 +271,9 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 			}
 
 			if label.Fingerprint == 0 {
-				panic(fmt.Sprintf("BUG: label %q has zero Fingerprint; group_by contains %s", label.Name, labelKeyword))
+				// Label fingerprints are missing for requests parsed before a config reload
+				// enabled them via protoparser.SetFingerprintLabels; skip such labels.
+				continue
 			}
 			_, _ = ld.WriteString(label.Name)
 			groupValues[labelIdx] = label.Name

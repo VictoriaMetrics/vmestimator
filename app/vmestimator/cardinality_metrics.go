@@ -35,6 +35,19 @@ var (
 		"Set to 0 to expose all estimates (default 0).")
 )
 
+// invalidateCardinalityCache drops churn state of the removed estimators keyed by id and resets the cardinality metrics cache.
+// Churn state of other snapshots, including the ones fetched from -storageNode, is preserved.
+func invalidateCardinalityCache(removed map[string]*estimator) {
+	cardinalityCacheMu.Lock()
+	for k := range globalChurnSnapshots.entries {
+		if _, ok := removed[k.snapshotID]; ok {
+			delete(globalChurnSnapshots.entries, k)
+		}
+	}
+	cardinalityMetricsCacheAt = time.Time{}
+	cardinalityCacheMu.Unlock()
+}
+
 func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []string) {
 	startTime := time.Now()
 

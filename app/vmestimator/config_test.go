@@ -16,10 +16,7 @@ func TestLoadConfigUniqueIDs(t *testing.T) {
 		if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
 			t.Fatalf("cannot write config: %s", err)
 		}
-		es, err := loadConfig(path)
-		for _, e := range es {
-			e.stop()
-		}
+		_, err := readConfig(path)
 		if (err != nil) != wantErr {
 			t.Fatalf("unexpected error: got %v; want error: %v", err, wantErr)
 		}
@@ -63,6 +60,175 @@ streams:
   interval: 5m
   min_cardinality: 10
 `, true)
+}
+
+func TestReloadConfig(t *testing.T) {
+	t.Cleanup(func() {
+		for _, e := range getEstimators() {
+			e.stop()
+		}
+		estimators.Store([]*estimator(nil))
+		configReloads.Set(0)
+		configReloadErrors.Set(0)
+		configSuccess.Set(0)
+	})
+
+	f := func(next string, wantSuccess float64, wantReloads, wantEstimators, wantReused int) {
+		t.Helper()
+
+		const initial = `
+streams:
+- interval: 15m
+- interval: 15m
+  group_by: [job]
+`
+
+		path := filepath.Join(t.TempDir(), "streams.yaml")
+		writeConfig := func(data string) {
+			t.Helper()
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatalf("cannot write config: %s", err)
+			}
+		}
+
+		// reset estimators to the initial config
+		writeConfig(initial)
+		cfg, err := readConfig(path)
+		if err != nil {
+			t.Fatalf("cannot read initial config: %s", err)
+		}
+		if _, err := loadConfig(cfg, nil); err != nil {
+			t.Fatalf("cannot load initial config: %s", err)
+		}
+		prevEstimators := getEstimators()
+
+		configReloads.Set(0)
+		configReloadErrors.Set(0)
+		// -1 detects a missing update, since 0 is a valid value.
+		configSuccess.Set(-1)
+
+		sighupCh := make(chan os.Signal)
+		stopReloader := startConfigReloader(path, cfg, sighupCh, nil)
+		writeConfig(next)
+		sighupCh <- nil
+		// stopReloader waits until the reloader handles the received signal.
+		stopReloader()
+
+		if got := configSuccess.Get(); got != wantSuccess {
+			t.Fatalf("unexpected vmestimator_config_last_reload_successful; got %v; want %v", got, wantSuccess)
+		}
+		if got := configReloads.Get(); got != uint64(wantReloads) {
+			t.Fatalf("unexpected vmestimator_config_reloads_total; got %d; want %d", got, wantReloads)
+		}
+		wantReloadErrors := uint64(0)
+		if wantSuccess == 0 {
+			wantReloadErrors = 1
+		}
+		if got := configReloadErrors.Get(); got != wantReloadErrors {
+			t.Fatalf("unexpected vmestimator_config_reloads_errors_total; got %d; want %d", got, wantReloadErrors)
+		}
+
+		es := getEstimators()
+		if len(es) != wantEstimators {
+			t.Fatalf("unexpected number of estimators; got %d; want %d", len(es), wantEstimators)
+		}
+		active := make(map[*estimator]bool, len(es))
+		for _, e := range es {
+			active[e] = true
+		}
+		isStopped := func(e *estimator) bool {
+			select {
+			case <-e.stopCh:
+				return true
+			default:
+				return false
+			}
+		}
+		reused := 0
+		for _, e := range prevEstimators {
+			stopped := isStopped(e)
+			if active[e] {
+				reused++
+				if stopped {
+					t.Fatalf("reused estimator %q must not be stopped", e.id)
+				}
+			} else if !stopped {
+				t.Fatalf("removed estimator %q must be stopped", e.id)
+			}
+		}
+		if reused != wantReused {
+			t.Fatalf("unexpected number of reused estimators; got %d; want %d", reused, wantReused)
+		}
+	}
+
+	// unchanged config
+	f(`
+streams:
+- interval: 15m
+- interval: 15m
+  group_by: [job]
+`, 1, 0, 2, 2)
+
+	// invalid config keeps previous estimators
+	f(`
+streams:
+- interval: 15m
+  hll_precision: 99
+`, 0, 0, 2, 2)
+
+	// estimator creation failure keeps previous estimators
+	f(`
+streams:
+- interval: 15m
+- interval: 15m
+  group_by: [job]
+- interval: 15m
+  group_by: [instance]
+- interval: 15m
+  filter: '{job='
+`, 0, 0, 2, 2)
+
+	// added stream
+	f(`
+streams:
+- interval: 15m
+- interval: 15m
+  group_by: [job]
+- interval: 15m
+  group_by: [instance]
+`, 1, 1, 3, 2)
+
+	// removed stream
+	f(`
+streams:
+- interval: 15m
+`, 1, 1, 1, 1)
+
+	// reordered streams
+	f(`
+streams:
+- interval: 15m
+  group_by: [job]
+- interval: 15m
+`, 1, 0, 2, 2)
+
+	// changed stream settings re-create the estimator
+	f(`
+streams:
+- interval: 15m
+  group_limit: 20
+- interval: 15m
+  group_by: [job]
+`, 1, 1, 2, 1)
+
+	// empty labels are equal to missing labels
+	f(`
+streams:
+- interval: 15m
+  labels: {}
+- interval: 15m
+  group_by: [job]
+`, 1, 0, 2, 2)
 }
 
 func TestCompiledFilterMatch(t *testing.T) {

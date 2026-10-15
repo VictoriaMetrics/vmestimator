@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/envflag"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fasttime"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -30,23 +32,29 @@ var (
 	prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
 )
 
+// estimators holds []*estimator.
+var estimators atomic.Value
+
+func getEstimators() []*estimator {
+	es, _ := estimators.Load().([]*estimator)
+	return es
+}
+
+// isAuthKeyProtectedPath returns true for paths verifying the corresponding -*AuthKey flag on their own,
+// so httpserver skips -httpAuth.* checks for them.
+// It must match paths the same way as the request handler in main.
+func isAuthKeyProtectedPath(r *http.Request) bool {
+	path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
+	return path == "/-/reload"
+}
+
 func main() {
 	envflag.Parse()
 	buildinfo.Init()
 	logger.Init()
 
-	es, err := loadConfig(*configPath)
-	if err != nil {
-		logger.Fatalf("cannot load config: %v", err)
-	}
-
-	for _, e := range es {
-		for _, l := range e.groupBy {
-			if l == labelKeyword {
-				protoparser.SetFingerprintLabels(true)
-			}
-		}
-	}
+	// Register SIGHUP handler before loading config, so early signals aren't lost.
+	sighupCh := procutil.NewSighupChan()
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -65,9 +73,19 @@ func main() {
 		logger.Infof("deduplicator enabled: interval=%s maxSize=%d passthroughThreshold=%d sizeBytes=%d", *deduplicationInterval, maxSize, passthroughThreshold, maxSize*bitsPerItem/8)
 	}
 
+	cfg, err := readConfig(*configPath)
+	if err != nil {
+		logger.Fatalf("cannot load config: %v", err)
+	}
+	if _, err := loadConfig(cfg, dedup); err != nil {
+		logger.Fatalf("cannot load config: %v", err)
+	}
+	configSuccess.Set(1)
+	configTimestamp.Set(fasttime.UnixTimestamp())
+
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
-			writeCardinalityMetrics(w, es, *storageNodes)
+			writeCardinalityMetrics(w, getEstimators(), *storageNodes)
 		})
 	}
 
@@ -79,11 +97,13 @@ func main() {
 	logger.Infof("starting vmestimator at %q", listenAddrs)
 	startTime := time.Now()
 
+	httpserver.RegisterAuthKeyProtectedPathsFunc(isAuthKeyProtectedPath)
+
 	go httpserver.Serve(listenAddrs, func(w http.ResponseWriter, r *http.Request) bool {
 		cmPath := *cardinalityMetricsExposeAt
 		if cmPath != "/metrics" && cmPath != "" && r.URL.Path == cmPath {
 			w.WriteHeader(http.StatusOK)
-			writeCardinalityMetrics(w, es, *storageNodes)
+			writeCardinalityMetrics(w, getEstimators(), *storageNodes)
 			return true
 		}
 		path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
@@ -97,6 +117,7 @@ func main() {
 						return
 					}
 				}
+				es := getEstimators()
 				esLen := uint32(len(es))
 				esStart := fastrand.Uint32n(esLen)
 				for j := uint32(0); j < esLen; j++ {
@@ -117,7 +138,7 @@ func main() {
 
 			bw := bufio.NewWriterSize(w, 64*1024)
 			enc := gob.NewEncoder(bw)
-			for _, e := range es {
+			for _, e := range getEstimators() {
 				if err := e.toSnapshot(func(s *snapshot) error {
 					return enc.Encode(s)
 				}); err != nil {
@@ -130,7 +151,7 @@ func main() {
 
 			return true
 		case "/reset":
-			for _, e := range es {
+			for _, e := range getEstimators() {
 				e.reset()
 			}
 			cardinalityCacheMu.Lock()
@@ -139,9 +160,23 @@ func main() {
 			cardinalityCacheMu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			return true
+		case "/-/reload":
+			if !httpserver.CheckAuthFlag(w, r, reloadAuthKey) {
+				return true
+			}
+			logger.Infof("api config reload was called, sending sighup")
+			procutil.SelfSIGHUP()
+			w.WriteHeader(http.StatusOK)
+			return true
 		}
 		return false
 	}, httpserver.ServeOptions{})
+
+	// There is nothing to reload when only -storageNode is set.
+	stopReloader := func() {}
+	if *configPath != "" {
+		stopReloader = startConfigReloader(*configPath, cfg, sighupCh, dedup)
+	}
 
 	logger.Infof("started vmestimator in %.3f seconds", time.Since(startTime).Seconds())
 
@@ -154,7 +189,8 @@ func main() {
 	if err := httpserver.Stop(listenAddrs); err != nil {
 		logger.Errorf("cannot stop http server: %s", err)
 	}
-	for _, e := range es {
+	stopReloader()
+	for _, e := range getEstimators() {
 		e.stop()
 	}
 	logger.Infof("shutting down vmestimator")

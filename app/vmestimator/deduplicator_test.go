@@ -90,6 +90,25 @@ func TestDeduplicator_filter(t *testing.T) {
 	f(tss, makeTSS(1, 2, 3))
 }
 
+func TestDeduplicatorReset(t *testing.T) {
+	d := newDeduplicator(10_000, time.Hour)
+	defer d.Stop()
+
+	tss := []protoparser.TimeSerie{{Fingerprint: 1}}
+	if got := d.filter(tss, nil); !reflect.DeepEqual(got, tss) {
+		t.Fatalf("first filter: got %v; want %v", got, tss)
+	}
+	if got := d.filter(tss, nil); len(got) != 0 {
+		t.Fatalf("duplicate filter: got %v; want no series", got)
+	}
+
+	d.Reset()
+
+	if got := d.filter(tss, nil); !reflect.DeepEqual(got, tss) {
+		t.Fatalf("filter after reset: got %v; want %v", got, tss)
+	}
+}
+
 func TestDeduplicator_filterSaturated(t *testing.T) {
 	// Use minimum valid maxSize so bucketMaxSize=1_000, keeping the test fast.
 	d := newDeduplicator(10_000, time.Hour)

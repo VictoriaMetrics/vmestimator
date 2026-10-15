@@ -244,6 +244,27 @@ streams:
       <labelname>: <labelvalue> ...
 ```
 
+### Config reload
+
+`vmestimator` reloads the `-config` file without restart on:
+
+* `SIGHUP` signal, e.g. `kill -HUP $(pidof vmestimator)`.
+* HTTP request to `/-/reload`. Protect it with `-reloadAuthKey`, passed via the `authKey` query arg.
+* Every `-configCheckInterval`, if the flag is set.
+
+If the file content is unchanged, nothing happens. Otherwise the new config is applied stream by stream:
+
+* Streams with unchanged settings keep their accumulated estimates and churn state. The order of streams in the file doesn't matter.
+* Added streams and streams with any changed setting (e.g. `group_limit` or `hll_precision`) start with empty estimates.
+* Removed streams are stopped and their estimates are no longer exposed.
+
+If any stream is added or changed, the deduplication state is reset, so the new streams receive all the series.
+If the new config is invalid, the error is logged and the previous config stays active.
+
+Reload status is exposed via `vmestimator_config_reloads_total`, `vmestimator_config_reloads_errors_total`,
+`vmestimator_config_last_reload_successful` and `vmestimator_config_last_reload_success_timestamp_seconds` metrics.
+Changes in command-line flags need a restart.
+
 ## Cardinality Metrics
 
 Cardinality estimates are exposed as the `cardinality_estimate` metric.
@@ -639,6 +660,8 @@ Usage of ./bin/vmestimator:
         Minimum cardinality estimate to expose. Estimates below this threshold are suppressed to reduce metric volume and noise. Set to 0 to expose all estimates (default 0).
   -config string
         Path to YAML configuration file. Must be set unless -storageNode is specified. See https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example
+  -configCheckInterval duration
+        Interval for checking for changes in '-config' file. By default, the checking is disabled. Send SIGHUP signal or request /-/reload in order to force config check for changes
   -deduplication.interval duration
         Time window for deduplication. When set, time series already seen within the window are dropped before being forwarded to estimators. Disabled when set to 0.
   -deduplication.maxSize int
@@ -756,6 +779,10 @@ Usage of ./bin/vmestimator:
         Optional URL to push metrics exposed at /metrics page. See https://docs.victoriametrics.com/victoriametrics/single-server-victoriametrics/#push-metrics . By default, metrics exposed at /metrics page aren't pushed to any remote storage
         Supports an array of values separated by comma or specified via multiple flags.
         Each array item can contain comma inside single-quoted or double-quoted string, {}, [] and () braces.
+  -reloadAuthKey value
+        Auth key for /-/reload http endpoint. It must be passed via authKey query arg. It overrides -httpAuth.*
+        Flag value can be read from the given file when using -reloadAuthKey=file:///abs/path/to/file or -reloadAuthKey=file://./relative/path/to/file.
+        Flag value can be read from the given http/https url when using -reloadAuthKey=http://host/path or -reloadAuthKey=https://host/path
   -secret.flags array
         Comma-separated list of flag names with secret values. Values for these flags are hidden in logs and on /metrics page
         Supports an array of values separated by comma or specified via multiple flags.
