@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* SECURITY: upgrade Go builder from Go1.26.6 to Go1.27.2. See [the list of issues addressed in Go1.27.2](https://github.com/golang/go/issues?q=milestone%3AGo1.27.2%20label%3ACherryPickApproved).
+
 * FEATURE: [dashboards](https://github.com/VictoriaMetrics/vmestimator/tree/main/dashboards): add "Trend" section with a long-term cardinality overview (90 days). Add dedicated "Global Churn %" and "Global Churn" (absolute) panels. Add "Top 10 Churn %" panel per group_by_keys. Remove the `instance` variable.
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add per-stream `min_cardinality` config field to override the global `-cardinalityMetrics.minCardinality` flag for individual streams. When unset or `0`, the global flag value is used. A negative value disables the threshold for the stream. See [#46](https://github.com/VictoriaMetrics/vmestimator/issues/46).
 
