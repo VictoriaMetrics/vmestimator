@@ -16,10 +16,7 @@ func TestLoadConfigUniqueIDs(t *testing.T) {
 		if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
 			t.Fatalf("cannot write config: %s", err)
 		}
-		es, err := loadConfig(path)
-		for _, e := range es {
-			e.stop()
-		}
+		_, err := readConfig(path)
 		if (err != nil) != wantErr {
 			t.Fatalf("unexpected error: got %v; want error: %v", err, wantErr)
 		}

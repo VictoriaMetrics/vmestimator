@@ -58,13 +58,7 @@ func invalidateCardinalityCache(es []*estimator) {
 	cardinalityCacheMu.Unlock()
 }
 
-func writeCardinalityMetrics(w io.Writer, storageNodeURLs []string) {
-	withEstimators(func(es []*estimator) {
-		writeCardinalityMetricsForEstimators(w, es, storageNodeURLs)
-	})
-}
-
-func writeCardinalityMetricsForEstimators(w io.Writer, es []*estimator, storageNodeURLs []string) {
+func writeCardinalityMetrics(w io.Writer, es []*estimator, storageNodeURLs []string) {
 	startTime := time.Now()
 
 	cardinalityCacheMu.Lock()

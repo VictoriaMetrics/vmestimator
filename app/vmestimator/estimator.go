@@ -96,10 +96,10 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 
 	for i := 0; i < len(e.buckets); i++ {
 		eb := &estimatorBucket{
-			idx:           i,
-			groupSize:     e.groupSize,
-			groupBy:       cfg.GroupBy,
-			interval:      cfg.Interval,
+			idx:            i,
+			groupSize:      e.groupSize,
+			groupBy:        cfg.GroupBy,
+			interval:       cfg.Interval,
 			calculateChurn: cfg.CalculateChurn,
 			labels:         cfg.Labels,
 			filter:         cfg.Filter,

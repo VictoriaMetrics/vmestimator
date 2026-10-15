@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"regexp"
@@ -8,13 +9,85 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fasttime"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
+	"github.com/VictoriaMetrics/metrics"
 	"github.com/VictoriaMetrics/metricsql"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
+	"github.com/cespare/xxhash/v2"
 	"gopkg.in/yaml.v2"
 )
 
+var (
+	reloadAuthKey = flagutil.NewPassword("reloadAuthKey", "Auth key for /-/reload http endpoint. It must be passed via authKey query arg. It overrides -httpAuth.*")
+
+	configCheckInterval = flag.Duration("configCheckInterval", 0, "Interval for checking for changes in '-config' file. "+
+		"By default, the checking is disabled. Send SIGHUP signal or request /-/reload in order to force config check for changes")
+
+	configReloads      = metrics.NewCounter(`vmestimator_config_reloads_total`)
+	configReloadErrors = metrics.NewCounter(`vmestimator_config_reloads_errors_total`)
+	configSuccess      = metrics.NewGauge(`vmestimator_config_last_reload_successful`, nil)
+	configTimestamp    = metrics.NewCounter(`vmestimator_config_last_reload_success_timestamp_seconds`)
+)
+
 type Config struct {
+	hash uint64
+
 	Streams []EstimatorConfig `yaml:"streams"`
+}
+
+// prepare normalizes config settings and validates them.
+func (cfg *Config) prepare() error {
+	for i, stream := range cfg.Streams {
+		sort.Strings(stream.GroupBy)
+		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
+			return fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
+		}
+		count := 0
+		newGroupBy := make([]string, 0, len(stream.GroupBy))
+		for _, g := range stream.GroupBy {
+			if g == labelKeyword {
+				count++
+				continue
+			}
+			newGroupBy = append(newGroupBy, g)
+		}
+		if count > 1 {
+			return fmt.Errorf("__label__ may appear at most once in group_by")
+		}
+		if count == 1 {
+			newGroupBy = append(newGroupBy, labelKeyword)
+		}
+		stream.GroupBy = newGroupBy
+		cfg.Streams[i] = stream
+	}
+
+	reservedLabels := map[string]bool{
+		"interval":        true,
+		"filter":          true,
+		"group_by_keys":   true,
+		"group_by_values": true,
+	}
+	ids := make(map[string]int, len(cfg.Streams))
+	for i, ec := range cfg.Streams {
+		for k := range ec.Labels {
+			if reservedLabels[k] {
+				return fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
+			}
+			if strings.HasPrefix(k, "by_") {
+				return fmt.Errorf("static label name %q is reserved: labels starting with \"by_\" are reserved and cannot be used in labels", k)
+			}
+		}
+		// Streams with the same labels, group_by, interval and filter produce identical time series.
+		id := estimatorConfigID(ec)
+		if j, ok := ids[id]; ok {
+			return fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
+		}
+		ids[id] = i
+	}
+
+	return nil
 }
 
 type EstimatorConfig struct {
@@ -30,9 +103,11 @@ type EstimatorConfig struct {
 	MinCardinality int64             `yaml:"min_cardinality"`
 }
 
-func readConfig(path string) ([]byte, error) {
+// readConfig reads, parses and prepares the config file at path.
+// An empty config is returned if path is empty and -storageNode is set.
+func readConfig(path string) (*Config, error) {
 	if path == "" && len(*storageNodes) > 0 {
-		return nil, nil
+		return &Config{}, nil
 	}
 	if path == "" {
 		return nil, fmt.Errorf("either -config or -storageNode must be specified; see https://github.com/VictoriaMetrics/vmestimator/blob/main/streams.yaml for config example")
@@ -42,100 +117,134 @@ func readConfig(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read config file %q: %w", path, err)
 	}
-	return data, nil
-}
-
-func parseEstimatorConfigs(path string, data []byte) ([]EstimatorConfig, error) {
-	if path == "" {
-		return nil, nil
-	}
-
 	var cfg Config
 	if err := yaml.UnmarshalStrict(data, &cfg); err != nil {
 		return nil, fmt.Errorf("cannot parse config file %q: %w", path, err)
 	}
-	for i, stream := range cfg.Streams {
-		sort.Strings(stream.GroupBy)
-		if stream.HLLPrecision != 0 && (stream.HLLPrecision < 4 || stream.HLLPrecision > 18) {
-			return nil, fmt.Errorf("invalid precision %d: must be in range [4, 18]", stream.HLLPrecision)
-		}
-		count := 0
-		newGroupBy := make([]string, 0, len(stream.GroupBy))
-		for _, g := range stream.GroupBy {
-			if g == labelKeyword {
-				count++
-				continue
-			}
-			newGroupBy = append(newGroupBy, g)
-		}
-		if count > 1 {
-			return nil, fmt.Errorf("__label__ may appear at most once in group_by")
-		}
-		if count == 1 {
-			newGroupBy = append(newGroupBy, labelKeyword)
-		}
-		stream.GroupBy = newGroupBy
-		cfg.Streams[i] = stream
+	if err := cfg.prepare(); err != nil {
+		return nil, fmt.Errorf("invalid config file %q: %w", path, err)
 	}
-
-	reservedLabels := map[string]bool{
-		"interval":        true,
-		"filter":          true,
-		"group_by_keys":   true,
-		"group_by_values": true,
-	}
-	es := make([]*estimator, 0, len(cfg.Streams))
-	ids := make(map[string]int, len(cfg.Streams))
-	for i, ec := range cfg.Streams {
-		for k := range ec.Labels {
-			if reservedLabels[k] {
-				return nil, fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
-			}
-			if strings.HasPrefix(k, "by_") {
-				return nil, fmt.Errorf("static label name %q is reserved: labels starting with \"by_\" are reserved and cannot be used in labels", k)
-			}
-		}
-		id := estimatorConfigID(ec)
-		if _, ok := ids[id]; ok {
-			return nil, fmt.Errorf("duplicate estimator config")
-		}
-		ids[id] = i
-	}
-
-	return cfg.Streams, nil
+	cfg.hash = xxhash.Sum64(data)
+	return &cfg, nil
 }
 
-// newEstimators builds estimators from the config data read from path.
-// No estimators stay running if an error is returned.
-func newEstimators(path string, data []byte) (es []*estimator, err error) {
-	cfgs, err := parseEstimatorConfigs(path, data)
-	if err != nil {
-		return nil, err
+// loadConfig applies cfg to the active estimators.
+//
+// Active estimators with the same id as a configured stream are reused with their state,
+// missing ones are created and the ones absent in the config are stopped.
+// It returns false if the set of estimators didn't change; stream order is ignored.
+// Active estimators are left untouched if an error is returned.
+func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
+	old := getEstimators()
+	removed := make(map[string]*estimator, len(old))
+	for _, e := range old {
+		removed[e.id] = e
 	}
-	defer func() {
-		if err == nil {
-			return
+	es := make([]*estimator, 0, len(cfg.Streams))
+	var created []*estimator
+	for _, ec := range cfg.Streams {
+		id := estimatorConfigID(ec)
+		if e := removed[id]; e != nil {
+			es = append(es, e)
+			delete(removed, id)
+			continue
 		}
-		for _, e := range es {
-			e.stop()
+		e, err := newEstimator(ec)
+		if err != nil {
+			for _, e := range created {
+				e.stop()
+			}
+			return false, fmt.Errorf("cannot create estimator: %w", err)
 		}
-		es = nil
+		es = append(es, e)
+		created = append(created, e)
+	}
+	if len(created) == 0 && len(removed) == 0 {
+		return false, nil
+	}
+
+	// Label fingerprinting is never turned off, since in-flight requests may still feed estimators needing it.
+	for _, e := range created {
+		if e.hasLabelKeyword {
+			protoparser.SetFingerprintLabels(true)
+			break
+		}
+	}
+	if dedup != nil {
+		// New estimators must see series the deduplicator already passed to the previous ones.
+		dedup.Reset()
+	}
+	// In-flight requests may still insert into removed estimators; this is harmless.
+	activeEstimators.Store(es)
+	for _, e := range removed {
+		e.stop()
+	}
+
+	invalidateCardinalityCache(es)
+
+	return true, nil
+}
+
+// startReloader re-reads the config at path on every sighupCh event and every -configCheckInterval,
+// and loads it if its contents differ from cfg. The previous config stays active on error.
+// The returned function stops the reloader and waits for it to exit.
+func startReloader(path string, cfg *Config, sighupCh <-chan os.Signal, dedup *deduplicator) (stop func()) {
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+
+	go func() {
+		defer close(doneCh)
+
+		var tickerCh <-chan time.Time
+		if *configCheckInterval > 0 {
+			ticker := time.NewTicker(*configCheckInterval)
+			defer ticker.Stop()
+			tickerCh = ticker.C
+		}
+
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-sighupCh:
+				logger.Infof("SIGHUP received; reloading config from %q", path)
+			case <-tickerCh:
+			}
+
+			newCfg, err := readConfig(path)
+			if err != nil {
+				configReloadErrors.Inc()
+				configSuccess.Set(0)
+				logger.Errorf("cannot read config from %q: %s; continuing with the previous config", path, err)
+				continue
+			}
+			if newCfg.hash == cfg.hash {
+				configSuccess.Set(1)
+				continue
+			}
+			changed, err := loadConfig(newCfg, dedup)
+			if err != nil {
+				configReloadErrors.Inc()
+				configSuccess.Set(0)
+				logger.Errorf("cannot load config from %q: %s; continuing with the previous config", path, err)
+				continue
+			}
+			configSuccess.Set(1)
+			cfg = newCfg
+			if !changed {
+				continue
+			}
+
+			configReloads.Inc()
+			configTimestamp.Set(fasttime.UnixTimestamp())
+			logger.Infof("reloaded config from %q", path)
+		}
 	}()
 
-	es = make([]*estimator, 0, len(cfgs))
-	for _, cfg := range cfgs {
-		e, err := newEstimator(cfg)
-		if err != nil {
-			return es, fmt.Errorf("cannot create estimator: %w", err)
-		}
-		// Streams with the same labels, group_by, interval and filter produce identical time series.
-		if j, ok := ids[e.id]; ok {
-			return nil, fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
-		}
-		ids[e.id] = i
-		es = append(es, e)
+	return func() {
+		close(stopCh)
+		<-doneCh
 	}
-	return es, nil
 }
 
 type compiledFilter []labelFilter

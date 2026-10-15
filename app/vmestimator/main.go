@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/envflag"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fasttime"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -30,6 +32,14 @@ var (
 	prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
 )
 
+// activeEstimators holds []*estimator.
+var activeEstimators atomic.Value
+
+func getEstimators() []*estimator {
+	es, _ := activeEstimators.Load().([]*estimator)
+	return es
+}
+
 func main() {
 	envflag.Parse()
 	buildinfo.Init()
@@ -37,17 +47,6 @@ func main() {
 
 	// Register SIGHUP handler before loading config, so early signals aren't lost.
 	sighupCh := procutil.NewSighupChan()
-
-	configData, err := readConfig(*configPath)
-	if err != nil {
-		logger.Fatalf("cannot load config: %v", err)
-	}
-	es, err := newEstimators(*configPath, configData)
-	if err != nil {
-		logger.Fatalf("cannot load config: %v", err)
-	}
-	enableFingerprintLabels(es)
-	activeEstimators.Store(&es)
 
 	var dedup *deduplicator
 	if *deduplicationInterval > 0 {
@@ -66,9 +65,19 @@ func main() {
 		logger.Infof("deduplicator enabled: interval=%s maxSize=%d passthroughThreshold=%d sizeBytes=%d", *deduplicationInterval, maxSize, passthroughThreshold, maxSize*bitsPerItem/8)
 	}
 
+	cfg, err := readConfig(*configPath)
+	if err != nil {
+		logger.Fatalf("cannot load config: %v", err)
+	}
+	if _, err := loadConfig(cfg, dedup); err != nil {
+		logger.Fatalf("cannot load config: %v", err)
+	}
+	configSuccess.Set(1)
+	configTimestamp.Set(fasttime.UnixTimestamp())
+
 	if *cardinalityMetricsExposeAt == `/metrics` {
 		metrics.RegisterMetricsWriter(func(w io.Writer) {
-			writeCardinalityMetrics(w, *storageNodes)
+			writeCardinalityMetrics(w, getEstimators(), *storageNodes)
 		})
 	}
 
@@ -84,29 +93,27 @@ func main() {
 		cmPath := *cardinalityMetricsExposeAt
 		if cmPath != "/metrics" && cmPath != "" && r.URL.Path == cmPath {
 			w.WriteHeader(http.StatusOK)
-			writeCardinalityMetrics(w, *storageNodes)
+			writeCardinalityMetrics(w, getEstimators(), *storageNodes)
 			return true
 		}
 		path, _ := strings.CutPrefix(r.URL.Path, `/cardinality`)
 		switch path {
 		case "/api/v1/write":
 			prometheusWriteRequests.Inc()
-			var err error
-			withEstimators(func(es []*estimator) {
-				err = protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
-					if dedup != nil {
-						tss = dedup.filter(tss, tss[:0])
-						if len(tss) == 0 {
-							return
-						}
+			err := protoparser.Parse(r.Body, func(tss []protoparser.TimeSerie) {
+				if dedup != nil {
+					tss = dedup.filter(tss, tss[:0])
+					if len(tss) == 0 {
+						return
 					}
-					esLen := uint32(len(es))
-					esStart := fastrand.Uint32n(esLen)
-					for j := uint32(0); j < esLen; j++ {
-						idx := (esStart + j) % esLen
-						es[idx].insertMany(tss)
-					}
-				})
+				}
+				es := getEstimators()
+				esLen := uint32(len(es))
+				esStart := fastrand.Uint32n(esLen)
+				for j := uint32(0); j < esLen; j++ {
+					idx := (esStart + j) % esLen
+					es[idx].insertMany(tss)
+				}
 			})
 			if err != nil {
 				httpserver.Errorf(w, r, "error parsing remote write request: %s", err)
@@ -152,7 +159,7 @@ func main() {
 		return false
 	}, httpserver.ServeOptions{})
 
-	stopReloader := startReloader(*configPath, configHash(configData), sighupCh, dedup)
+	stopReloader := startReloader(*configPath, cfg, sighupCh, dedup)
 
 	logger.Infof("started vmestimator in %.3f seconds", time.Since(startTime).Seconds())
 
