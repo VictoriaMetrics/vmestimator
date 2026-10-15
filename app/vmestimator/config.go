@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fasttime"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/flagutil"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
@@ -60,6 +61,7 @@ func (cfg *Config) prepare() error {
 			newGroupBy = append(newGroupBy, labelKeyword)
 		}
 		stream.GroupBy = newGroupBy
+		stream.applyDefaults()
 		cfg.Streams[i] = stream
 	}
 
@@ -80,7 +82,7 @@ func (cfg *Config) prepare() error {
 			}
 		}
 		// Streams with the same labels, group_by, interval and filter produce identical time series.
-		id := estimatorConfigID(ec)
+		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter)
 		if j, ok := ids[id]; ok {
 			return fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
 		}
@@ -101,6 +103,25 @@ type EstimatorConfig struct {
 	HLLPrecision   uint8             `yaml:"hll_precision"`
 	HLLSparse      *bool             `yaml:"hll_sparse"`
 	MinCardinality int64             `yaml:"min_cardinality"`
+}
+
+func (ec *EstimatorConfig) applyDefaults() {
+	if ec.Interval == 0 {
+		ec.Interval = 5 * time.Minute
+	}
+	if ec.GroupLimit <= 0 {
+		ec.GroupLimit = 10000
+	}
+	if ec.Buckets <= 0 {
+		buckets := min(64, 2*cgroup.AvailableCPUs())
+		ec.Buckets = max(4, buckets)
+	}
+	if ec.HLLPrecision == 0 {
+		ec.HLLPrecision = 14
+	}
+	if ec.HLLSparse == nil {
+		ec.HLLSparse = new(true)
+	}
 }
 
 // readConfig reads, parses and prepares the config file at path.
@@ -143,7 +164,7 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 	es := make([]*estimator, 0, len(cfg.Streams))
 	var created []*estimator
 	for _, ec := range cfg.Streams {
-		id := estimatorConfigID(ec)
+		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter)
 		if e := removed[id]; e != nil {
 			es = append(es, e)
 			delete(removed, id)
@@ -175,7 +196,7 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 		dedup.Reset()
 	}
 	// In-flight requests may still insert into removed estimators; this is harmless.
-	activeEstimators.Store(es)
+	estimators.Store(es)
 	for _, e := range removed {
 		e.stop()
 	}

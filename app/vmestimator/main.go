@@ -32,11 +32,11 @@ var (
 	prometheusWriteRequests = metrics.NewCounter(`vmestimator_http_requests_total{path="/api/v1/write", protocol="promremotewrite"}`)
 )
 
-// activeEstimators holds []*estimator.
-var activeEstimators atomic.Value
+// estimators holds []*estimator.
+var estimators atomic.Value
 
 func getEstimators() []*estimator {
-	es, _ := activeEstimators.Load().([]*estimator)
+	es, _ := estimators.Load().([]*estimator)
 	return es
 }
 

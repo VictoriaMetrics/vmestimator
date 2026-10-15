@@ -87,7 +87,7 @@ func resetEstimators() {
 	for _, e := range getEstimators() {
 		e.stop()
 	}
-	activeEstimators.Store([]*estimator(nil))
+	estimators.Store([]*estimator(nil))
 }
 
 func TestLoadConfig(t *testing.T) {

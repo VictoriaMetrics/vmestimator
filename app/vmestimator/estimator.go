@@ -14,7 +14,6 @@ import (
 	"github.com/dgryski/go-metro"
 	"github.com/valyala/fastrand"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/cgroup"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/metrics"
 	"github.com/VictoriaMetrics/vmestimator/app/vmestimator/protoparser"
@@ -44,7 +43,7 @@ type estimator struct {
 }
 
 func newEstimator(cfg EstimatorConfig) (*estimator, error) {
-	applyEstimatorDefaults(&cfg)
+	cfg.applyDefaults()
 
 	if len(cfg.GroupBy) > 5 {
 		return nil, fmt.Errorf("group by must not be bigger than 5 elements; got %d", len(cfg.GroupBy))
@@ -133,25 +132,6 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	return e, nil
 }
 
-func applyEstimatorDefaults(cfg *EstimatorConfig) {
-	if cfg.Interval == 0 {
-		cfg.Interval = 5 * time.Minute
-	}
-	if cfg.GroupLimit <= 0 {
-		cfg.GroupLimit = 10000
-	}
-	if cfg.Buckets <= 0 {
-		buckets := min(64, 2*cgroup.AvailableCPUs())
-		cfg.Buckets = max(4, buckets)
-	}
-	if cfg.HLLPrecision == 0 {
-		cfg.HLLPrecision = 14
-	}
-	if cfg.HLLSparse == nil {
-		cfg.HLLSparse = new(true)
-	}
-}
-
 func estimatorID(labels map[string]string, groupBy []string, interval time.Duration, filter string) string {
 	groupByKey := `__global__`
 	if len(groupBy) > 0 {
@@ -176,11 +156,6 @@ func estimatorID(labels map[string]string, groupBy []string, interval time.Durat
 	}
 
 	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, interval, filter)
-}
-
-func estimatorConfigID(cfg EstimatorConfig) string {
-	applyEstimatorDefaults(&cfg)
-	return estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter)
 }
 
 func (e *estimator) stop() {
