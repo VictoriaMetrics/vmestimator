@@ -17,6 +17,39 @@ DOCKER_BUILD ?= $(DOCKER) build
 DOCKER_COMPOSE ?= $(DOCKER) compose
 DOCKER_IMAGE_LS ?= $(DOCKER) image ls --format '{{.Repository}}:{{.Tag}}'
 
+# docker_buildx_push builds multiarch image with root image $(1) and pushes it as $(2).
+# With SKIP_EXISTING_DOCKER_TAGS=1 a push rejected by registry tag immutability is ignored,
+# so publishing can be re-run after some of the tags were already pushed.
+define docker_buildx_push
+	log=$$(mktemp); \
+	{ $(DOCKER) buildx build \
+		--platform=linux/amd64,linux/arm,linux/arm64,linux/ppc64le,linux/386 \
+		--build-arg certs_image=$(CERTS_IMAGE) \
+		--build-arg root_image=$(1) \
+		--build-arg APP_NAME=$(APP_NAME) \
+		--build-arg BINARY_SUFFIX="" \
+		--label "org.opencontainers.image.source=https://github.com/VictoriaMetrics/VictoriaMetrics" \
+		--label "org.opencontainers.image.documentation=https://docs.victoriametrics.com/" \
+		--label "org.opencontainers.image.title=$(APP_NAME)" \
+		--label "org.opencontainers.image.vendor=VictoriaMetrics" \
+		--label "org.opencontainers.image.version=$(PKG_TAG)" \
+		--label "org.opencontainers.image.created=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+		--tag $(2) \
+		-o type=image \
+		--provenance=false \
+		--sbom=true \
+		-f app/$(APP_NAME)/multiarch/Dockerfile \
+		--push \
+		bin 2>&1; echo $$? > $$log.rc; } | tee $$log; \
+	rc=$$(cat $$log.rc); \
+	if [ "$$rc" != 0 ] && [ "$(SKIP_EXISTING_DOCKER_TAGS)" = 1 ] && grep -qi 'immutab' $$log; then \
+		echo "$(2) already exists and is immutable; skipping"; rc=0; \
+	fi; \
+	rm -f $$log $$log.rc; \
+	exit $$rc
+
+endef
+
 package-base:
 	($(DOCKER_IMAGE_LS) | grep -q '$(BASE_IMAGE)$$') \
 		|| $(DOCKER_BUILD) \
@@ -83,48 +116,10 @@ publish-via-docker:
 		app-via-docker-linux-arm64 \
 		app-via-docker-linux-ppc64le \
 		app-via-docker-linux-386
-	$(DOCKER) buildx build \
-		--platform=linux/amd64,linux/arm,linux/arm64,linux/ppc64le,linux/386 \
-		--build-arg certs_image=$(CERTS_IMAGE) \
-		--build-arg root_image=$(ROOT_IMAGE) \
-		--build-arg APP_NAME=$(APP_NAME) \
-		--build-arg BINARY_SUFFIX="" \
-		--label "org.opencontainers.image.source=https://github.com/VictoriaMetrics/VictoriaMetrics" \
-		--label "org.opencontainers.image.documentation=https://docs.victoriametrics.com/" \
-		--label "org.opencontainers.image.title=$(APP_NAME)" \
-		--label "org.opencontainers.image.vendor=VictoriaMetrics" \
-		--label "org.opencontainers.image.version=$(PKG_TAG)" \
-		--label "org.opencontainers.image.created=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-		$(foreach registry,$(DOCKER_REGISTRIES),\
-		--tag $(registry)/$(DOCKER_NAMESPACE)/$(APP_NAME):$(PKG_TAG)$(RACE)$(EXTRA_DOCKER_TAG_SUFFIX) \
-		) \
-		-o type=image \
-		--provenance=false \
-		--sbom=true \
-		-f app/$(APP_NAME)/multiarch/Dockerfile \
-		--push \
-		bin
-	$(DOCKER) buildx build \
-		--platform=linux/amd64,linux/arm,linux/arm64,linux/ppc64le,linux/386 \
-		--build-arg certs_image=$(CERTS_IMAGE) \
-		--build-arg root_image=$(ROOT_IMAGE_SCRATCH) \
-		--build-arg APP_NAME=$(APP_NAME) \
-		--build-arg BINARY_SUFFIX="" \
-		--label "org.opencontainers.image.source=https://github.com/VictoriaMetrics/VictoriaMetrics" \
-		--label "org.opencontainers.image.documentation=https://docs.victoriametrics.com/" \
-		--label "org.opencontainers.image.title=$(APP_NAME)" \
-		--label "org.opencontainers.image.vendor=VictoriaMetrics" \
-		--label "org.opencontainers.image.version=$(PKG_TAG)" \
-		--label "org.opencontainers.image.created=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-		$(foreach registry,$(DOCKER_REGISTRIES),\
-		--tag $(registry)/$(DOCKER_NAMESPACE)/$(APP_NAME):$(PKG_TAG)$(RACE)$(EXTRA_DOCKER_TAG_SUFFIX)-scratch \
-		) \
-		-o type=image \
-		--provenance=false \
-		--sbom=true \
-		-f app/$(APP_NAME)/multiarch/Dockerfile \
-		--push \
-		bin
+	$(foreach registry,$(DOCKER_REGISTRIES),\
+		$(call docker_buildx_push,$(ROOT_IMAGE),$(registry)/$(DOCKER_NAMESPACE)/$(APP_NAME):$(PKG_TAG)$(RACE)$(EXTRA_DOCKER_TAG_SUFFIX)))
+	$(foreach registry,$(DOCKER_REGISTRIES),\
+		$(call docker_buildx_push,$(ROOT_IMAGE_SCRATCH),$(registry)/$(DOCKER_NAMESPACE)/$(APP_NAME):$(PKG_TAG)$(RACE)$(EXTRA_DOCKER_TAG_SUFFIX)-scratch))
 	cd bin && rm -rf \
 		$(APP_NAME)-linux-amd64-prod \
 		$(APP_NAME)-linux-arm-prod \
