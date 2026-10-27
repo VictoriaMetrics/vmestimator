@@ -25,7 +25,7 @@ Released at 2026-10-26
 
 ## [v0.1.17](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.17)
 
-Released at 2027-10-15
+Released at 2026-10-15
 
 **Update Note 1:** [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): vmestimator now refuses to start if the `-config` file contains streams with identical `labels`, `group_by`, `interval` and `filter`. Such streams produce identical time series, so differences in other fields (`group_limit`, `buckets`, `hll_precision`, `hll_sparse`, `calculate_churn`, `min_cardinality`) were ambiguous. The `group_by` order is ignored, and an omitted `interval` is treated as the default `5m`. Before upgrading, merge or remove duplicate streams in the config.
 
@@ -37,16 +37,16 @@ Released at 2027-10-15
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add per-stream `min_cardinality` config field to override the global `-cardinalityMetrics.minCardinality` flag for individual streams. When unset or `0`, the global flag value is used. A negative value disables the threshold for the stream. See [#46](https://github.com/VictoriaMetrics/vmestimator/issues/46).
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): support reloading the `-config` file without restart on `SIGHUP` signal, on request to `/-/reload` endpoint (protected with `-reloadAuthKey`) and every `-configCheckInterval`. Streams with unchanged settings keep their accumulated estimates and churn state, while added or changed streams start from scratch. See [#57](https://github.com/VictoriaMetrics/vmestimator/issues/57).
 
-## [v0.1.16](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
+## [v0.1.16](ht6ps://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
 
-Released at 2027-09-08
+Released at 2026-09-08
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `churn_interval` stream config option. When set, vmestimator emits `cardinality_churn_ratio` metrics measuring how quickly the series set changes within the measurement window. The ratio is computed as `(2*|A∪B| - |A| - |B|) / |A∪B|` where `A` is the retained HLL snapshot and `B` is the current sketch, resulting in a value in `[0, 1]` where `0` means a stable series set and `1` means complete churn. See [churn-calculation](https://docs.victoriametrics.com/victoriametrics/vmestimator/#churn-calculation) and [#24](https://github.com/VictoriaMetrics/vmestimator/issues/24).
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): simplify overflow handling in the deduplicator. Expose `vmestimator_deduplication_passed_total`, `vmestimator_deduplication_dropped_total`, `vmestimator_deduplication_bloom_filter_size`, and `vmestimator_deduplication_bloom_filter_max_size` metrics for monitoring deduplication effectiveness. See [#48](https://github.com/VictoriaMetrics/vmestimator/pull/48).
 
 ## [v0.1.15](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.15)
 
-Released at 2027-08-17
+Released at 2026-08-17
 
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add time series deduplicator to drop duplicate series within a configurable time window before forwarding to estimators. Use `-deduplication.interval` to enable it, `-deduplication.maxSizeBytes` or `-deduplication.maxSize` to cap memory usage. When cardinality approaches 80% of the limit, the deduplicator gradually falls back to pass-through mode to keep bloom filters below saturation. See [#44](https://github.com/VictoriaMetrics/vmestimator/pull/44).
 
