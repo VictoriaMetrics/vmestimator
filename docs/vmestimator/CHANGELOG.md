@@ -37,7 +37,7 @@ Released at 2026-10-15
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add per-stream `min_cardinality` config field to override the global `-cardinalityMetrics.minCardinality` flag for individual streams. When unset or `0`, the global flag value is used. A negative value disables the threshold for the stream. See [#46](https://github.com/VictoriaMetrics/vmestimator/issues/46).
 * FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): support reloading the `-config` file without restart on `SIGHUP` signal, on request to `/-/reload` endpoint (protected with `-reloadAuthKey`) and every `-configCheckInterval`. Streams with unchanged settings keep their accumulated estimates and churn state, while added or changed streams start from scratch. See [#57](https://github.com/VictoriaMetrics/vmestimator/issues/57).
 
-## [v0.1.16](ht6ps://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
+## [v0.1.16](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.16)
 
 Released at 2026-09-08
 
