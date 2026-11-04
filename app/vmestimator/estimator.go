@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -203,17 +204,15 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 				continue
 			}
 			bi := int(ts.Fingerprint % bucketsNum)
-			e.buckets[bi].insert(ts.Fingerprint, 0, nil)
+			e.buckets[bi].insert(ts.Fingerprint)
 			cnt++
 		}
 		e.insertTotal.Add(cnt)
 		return
 	}
 
-	var cnt int
 	// When __label__ is present it is always the last element; iterate only the explicit keys.
 	groupByKeys := e.groupBy
-	groupValues := make([]string, len(e.groupBy))
 	if e.hasLabelKeyword {
 		groupByKeys = e.groupBy[:len(e.groupBy)-1]
 	}
@@ -221,29 +220,33 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 	d := getDigest()
 	defer putDigest(d)
 
+	// Inserts are collected first and then applied per bucket, so every bucket is locked
+	// at most once per insertMany call instead of once per series (or per label for __label__).
+	b := getGroupInsertBatch()
+	defer putGroupInsertBatch(b)
+	items := b.items[:0]
+
 	tssLen := uint32(len(tss))
 	start := fastrand.Uint32n(tssLen)
 	for j := uint32(0); j < tssLen; j++ {
 		i := (start + j) % tssLen
 
-		ts := tss[i]
+		ts := &tss[i]
 		if !e.compiledFilter.match(ts.Labels) {
 			continue
 		}
 
 		d.Reset()
-		clear(groupValues)
 
 		// hasNames starts true when there are no explicit keys (pure __label__ mode).
 		hasNames := len(groupByKeys) == 0
-		for i, labelName := range groupByKeys {
+		for _, labelName := range groupByKeys {
 			for _, l := range ts.Labels {
 				if l.Name == labelName {
 					hasNames = true
 
 					_, _ = d.WriteString("\u0000")
 					_, _ = d.WriteString(l.Value)
-					groupValues[i] = l.Value
 					break
 				}
 			}
@@ -255,37 +258,105 @@ func (e *estimator) insertMany(tss []protoparser.TimeSerie) {
 		}
 
 		if !e.hasLabelKeyword {
-			key := d.Sum64()
-			bi := int(key % bucketsNum)
-			e.buckets[bi].insert(ts.Fingerprint, key, groupValues)
-			cnt++
+			items = append(items, groupInsert{fp: ts.Fingerprint, key: d.Sum64(), tsIdx: i, labelIdx: -1})
 			continue
 		}
 
 		// __label__ expansion: one insert per label in the series.
-		labelIdx := len(e.groupBy) - 1
-		for _, label := range ts.Labels {
-			ld := *d
-			if len(groupByKeys) > 0 {
-				_, _ = ld.WriteString("\u0000")
-			}
-
+		if len(groupByKeys) > 0 {
+			_, _ = d.WriteString("\u0000")
+		}
+		for li, label := range ts.Labels {
 			if label.Fingerprint == 0 {
 				// Label fingerprints are missing for requests parsed before a config reload
 				// enabled them via protoparser.SetFingerprintLabels; skip such labels.
 				continue
 			}
-			_, _ = ld.WriteString(label.Name)
-			groupValues[labelIdx] = label.Name
 
-			key := ld.Sum64()
-			bi := int(key % bucketsNum)
-			e.buckets[bi].insert(label.Fingerprint, key, groupValues)
-			cnt++
+			ld := *d
+			_, _ = ld.WriteString(label.Name)
+			items = append(items, groupInsert{fp: label.Fingerprint, key: ld.Sum64(), tsIdx: i, labelIdx: int32(li)})
 		}
 	}
+	b.items = items
 
-	e.insertTotal.Add(cnt)
+	e.insertGroups(b, tss)
+	e.insertTotal.Add(len(items))
+}
+
+// groupInsert is a pending insert of fp into the group identified by key.
+// Group values are materialized only when a new group is created,
+// so only the position of the series (and of the expanded label for __label__) is kept.
+type groupInsert struct {
+	fp       uint64
+	key      uint64
+	tsIdx    uint32
+	labelIdx int32
+}
+
+type groupInsertBatch struct {
+	items   []groupInsert
+	sorted  []groupInsert
+	offsets []int
+}
+
+var groupInsertBatchPool sync.Pool
+
+func getGroupInsertBatch() *groupInsertBatch {
+	v := groupInsertBatchPool.Get()
+	if v == nil {
+		return &groupInsertBatch{}
+	}
+	return v.(*groupInsertBatch)
+}
+
+func putGroupInsertBatch(b *groupInsertBatch) {
+	b.items = b.items[:0]
+	b.sorted = b.sorted[:0]
+	groupInsertBatchPool.Put(b)
+}
+
+// insertGroups groups b.items by bucket and inserts every group under a single bucket lock.
+func (e *estimator) insertGroups(b *groupInsertBatch, tss []protoparser.TimeSerie) {
+	if len(b.items) == 0 {
+		return
+	}
+	bucketsNum := uint64(len(e.buckets))
+
+	// Counting sort by bucket index.
+	offsets := slices.Grow(b.offsets[:0], len(e.buckets))[:len(e.buckets)]
+	clear(offsets)
+	for _, it := range b.items {
+		offsets[it.key%bucketsNum]++
+	}
+	var sum int
+	for bi, n := range offsets {
+		offsets[bi] = sum
+		sum += n
+	}
+	sorted := slices.Grow(b.sorted[:0], len(b.items))[:len(b.items)]
+	for _, it := range b.items {
+		bi := it.key % bucketsNum
+		sorted[offsets[bi]] = it
+		offsets[bi]++
+	}
+	// offsets[bi] now points to the end of bucket bi items.
+	b.offsets = offsets
+	b.sorted = sorted
+
+	// Start from a random bucket, so concurrent callers do not convoy on the same bucket locks.
+	start := int(fastrand.Uint32n(uint32(len(e.buckets))))
+	for j := range e.buckets {
+		bi := (start + j) % len(e.buckets)
+		from := 0
+		if bi > 0 {
+			from = offsets[bi-1]
+		}
+		if from == offsets[bi] {
+			continue
+		}
+		e.buckets[bi].insertGroups(sorted[from:offsets[bi]], tss)
+	}
 }
 
 func (e *estimator) reset() {
@@ -507,41 +578,58 @@ func (eb *estimatorBucket) rotate() {
 	eb.mu.Unlock()
 }
 
-func (eb *estimatorBucket) insert(fp uint64, groupValuesKey uint64, groupValues []string) {
+func (eb *estimatorBucket) insert(fp uint64) {
 	eb.mu.Lock()
-
-	if len(eb.groupBy) == 0 {
-		eb.sketch.InsertHash(fp)
-		eb.mu.Unlock()
-		return
-	}
-
-	gsk, ok := eb.groups[groupValuesKey]
-	if !ok {
-		var values []string
-		if prevGSK, ok := eb.prevGroups[groupValuesKey]; ok {
-			values = prevGSK.values
-		} else {
-			if !eb.groupSize.allowInsertLocked(eb.idx, groupValuesKey) {
-				eb.mu.Unlock()
-				return
-			}
-		}
-
-		if values == nil {
-			values = make([]string, len(groupValues))
-			for i, v := range groupValues {
-				values[i] = strings.Clone(v)
-			}
-		}
-		gsk = groupSketch{
-			values: values,
-			Sketch: eb.newSketch(),
-		}
-		eb.groups[groupValuesKey] = gsk
-	}
-	gsk.InsertHash(fp)
+	eb.sketch.InsertHash(fp)
 	eb.mu.Unlock()
+}
+
+// insertGroups inserts items into the group sketches of eb under a single lock acquisition.
+// tss must be the slice items were collected from.
+func (eb *estimatorBucket) insertGroups(items []groupInsert, tss []protoparser.TimeSerie) {
+	eb.mu.Lock()
+	for _, it := range items {
+		gsk, ok := eb.groups[it.key]
+		if !ok {
+			var values []string
+			if prevGSK, ok := eb.prevGroups[it.key]; ok {
+				values = prevGSK.values
+			} else if !eb.groupSize.allowInsertLocked(eb.idx, it.key) {
+				continue
+			}
+
+			if values == nil {
+				values = eb.newGroupValues(&tss[it.tsIdx], it.labelIdx)
+			}
+			gsk = groupSketch{
+				values: values,
+				Sketch: eb.newSketch(),
+			}
+			eb.groups[it.key] = gsk
+		}
+		gsk.InsertHash(it.fp)
+	}
+	eb.mu.Unlock()
+}
+
+// newGroupValues returns a copy of the groupBy values of ts.
+// labelIdx is the index of the label in ts.Labels expanded by __label__; it is ignored without __label__.
+func (eb *estimatorBucket) newGroupValues(ts *protoparser.TimeSerie, labelIdx int32) []string {
+	values := make([]string, len(eb.groupBy))
+	keys := eb.groupBy
+	if eb.hasLabelKeyword {
+		keys = keys[:len(keys)-1]
+		values[len(keys)] = strings.Clone(ts.Labels[labelIdx].Name)
+	}
+	for i, labelName := range keys {
+		for _, l := range ts.Labels {
+			if l.Name == labelName {
+				values[i] = strings.Clone(l.Value)
+				break
+			}
+		}
+	}
+	return values
 }
 
 func (eb *estimatorBucket) mergeSketches(cur, prev, res *hyperloglog.Sketch) {
