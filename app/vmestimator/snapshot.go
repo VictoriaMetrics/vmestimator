@@ -26,7 +26,7 @@ func newSnapshots() *snapshots {
 func (ss *snapshots) add(newS *snapshot) {
 	// Snapshots from older vmestimator versions have no ID; generate it from the snapshot fields.
 	if newS.ID == "" {
-		newS.ID = estimatorID(newS.Labels, newS.GroupBy, newS.Interval, newS.Filter)
+		newS.ID = estimatorID(newS.Labels, newS.GroupBy, newS.Interval, newS.Filter, newS.Mode)
 	}
 
 	ss.mu.Lock()
@@ -64,6 +64,8 @@ type snapshot struct {
 	CalculateChurn bool
 	Labels         map[string]string
 	Filter         string
+	// Mode is empty for gauge streams; snapshots from vmestimator versions without the mode setting are gauges.
+	Mode string
 
 	GroupBy         []string
 	GroupLimit      int64
@@ -127,6 +129,7 @@ func (s *snapshot) merge(other *snapshot) {
 
 	s.ID = other.ID
 	s.Interval = other.Interval
+	s.Mode = other.Mode
 	s.CalculateChurn = s.CalculateChurn || other.CalculateChurn
 	s.Filter = other.Filter
 	for k, v := range other.Labels {
@@ -170,7 +173,7 @@ func (s *snapshot) writeCardinalityEstimates(w io.Writer) (uint64, error) {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter, s.Mode)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	if len(s.GroupBy) == 0 {
@@ -224,7 +227,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 		putFormatBuf(tmpBufP)
 	}()
 
-	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter)
+	metricPrefixB := appendCardinalityEstimateMetricPrefix(make([]byte, 0, 128), s.Labels, s.Interval, s.Filter, s.Mode)
 	metricPrefix := bytesutil.ToUnsafeString(metricPrefixB)
 
 	tmpBuf = tmpBuf[:0]
@@ -236,7 +239,7 @@ func (s *snapshot) writeGroupSizeAndLimit(w io.Writer, groupSize int64) error {
 	}
 
 	tmpBuf = tmpBuf[:0]
-	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval, s.Filter)
+	tmpBuf = appendGroupLimitMetric(tmpBuf, s.GroupBy, s.Interval, s.Filter, s.Mode)
 	tmpBuf = strconv.AppendInt(tmpBuf, s.GroupLimit, 10)
 	tmpBuf = append(tmpBuf, "\n"...)
 	if _, err := w.Write(tmpBuf); err != nil {
@@ -265,6 +268,7 @@ func (s *snapshot) writeDroppedMetric(w io.Writer, dropped uint64) error {
 	tmpBuf = strconv.AppendQuote(tmpBuf, s.Interval.String())
 	tmpBuf = append(tmpBuf, `,filter=`...)
 	tmpBuf = strconv.AppendQuote(tmpBuf, s.Filter)
+	tmpBuf = appendModeLabel(tmpBuf, s.Mode)
 	tmpBuf = append(tmpBuf, `,`...)
 	tmpBuf = appendGroupByKeysLabel(tmpBuf, `group_by_keys`, s.GroupBy)
 	tmpBuf = append(tmpBuf, `} `...)
@@ -281,6 +285,7 @@ func (s *snapshot) reset() {
 	s.GroupLimit = 0
 	s.GroupRejectSize = 0
 	s.Interval = 0
+	s.Mode = ""
 	s.CalculateChurn = false
 	s.Filter = ""
 	s.GroupBy = s.GroupBy[:0]
@@ -309,12 +314,13 @@ func appendCardinalityEstimateGroupSizeMetric(buf []byte, metricPrefix string, k
 
 // appendGroupLimitMetric produces:
 // 'vmestimator_estimator_group_limit{group_by_keys="fooKey,barKey",interval="5m"} '
-func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration, filter string) []byte {
+func appendGroupLimitMetric(buf []byte, keys []string, interval time.Duration, filter, mode string) []byte {
 	buf = buf[:0]
 	buf = append(buf, `vmestimator_estimator_group_limit{interval=`...)
 	buf = strconv.AppendQuote(buf, interval.String())
 	buf = append(buf, `,filter=`...)
 	buf = strconv.AppendQuote(buf, filter)
+	buf = appendModeLabel(buf, mode)
 	buf = append(buf, `,group_by_keys="__group__",`...)
 	buf = appendGroupByKeysLabel(buf, `group_by_values`, keys)
 	buf = append(buf, `} `...)
@@ -388,11 +394,12 @@ func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte 
 	return buf
 }
 
-func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter string) []byte {
+func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter, mode string) []byte {
 	buf = append(buf, `cardinality_estimate{interval=`...)
 	buf = strconv.AppendQuote(buf, interval.String())
 	buf = append(buf, ",filter="...)
 	buf = strconv.AppendQuote(buf, filter)
+	buf = appendModeLabel(buf, mode)
 
 	if len(labels) > 0 {
 		keys := make([]string, 0, len(labels))
@@ -409,6 +416,16 @@ func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string,
 	}
 
 	return buf
+}
+
+// appendModeLabel produces ',mode="counter"' for counter streams and nothing for gauge ones,
+// so series of gauge streams stay unchanged.
+func appendModeLabel(buf []byte, mode string) []byte {
+	if mode == "" {
+		return buf
+	}
+	buf = append(buf, `,mode=`...)
+	return strconv.AppendQuote(buf, mode)
 }
 
 type sketchesPool struct {

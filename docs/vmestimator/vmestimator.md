@@ -167,6 +167,18 @@ streams:
     # default: false (churn ratio metric is not emitted)
     calculate_churn: <bool>
 
+    # Optional. How the estimate behaves over the interval:
+    #  - gauge: the estimate covers a sliding window of the last interval and goes down
+    #    when previously seen series disappear.
+    #  - counter: all estimates reset to zero at every interval boundary aligned to the
+    #    Unix epoch (e.g. at 00:00 UTC every day for 24h) and only grow until the next reset.
+    #    Counter streams add the mode="counter" label to their metrics.
+    #    calculate_churn cannot be used with mode: counter.
+    # See https://docs.victoriametrics.com/victoriametrics/vmestimator/#counter-mode
+    #
+    # default: gauge
+    mode: <gauge|counter>
+
     # Optional. MetricsQL label selector used to pre-filter time series before counting.
     # Only series matching all matchers are counted. Supports equality (=), negative equality (!=),
     # regexp (=~), and negative regexp (!~) matchers.
@@ -428,6 +440,42 @@ cardinality_churn_ratio{interval="15m0s",filter="",group_by_keys="job",group_by_
 ```
 
 This helps identify jobs that create the most indexing pressure on storage, even when their current active cardinality appears moderate.
+
+### Counter mode
+
+By default, a stream is a gauge: it estimates the unique series seen over a sliding window of the last `interval`,
+and the estimate goes down when series stop being ingested.
+
+To count unique series since a fixed point in time instead, set `mode: counter` on a stream:
+
+```yaml
+# streams.yaml
+
+- interval: '24h'
+  mode: counter
+  group_by: ['__name__']
+```
+
+In counter mode, all estimates of the stream reset to zero at every `interval` boundary aligned to the Unix epoch
+and only grow until the next reset. For example, a `24h` stream counts unique series per metric name since 00:00 UTC
+of the current day, and a `1h` stream counts them since the top of the current hour.
+Intervals that do not divide 24h evenly are still aligned to the Unix epoch, not to the start of a day.
+
+Counter streams add the `mode="counter"` label, so they can be configured next to a gauge stream with the same
+`interval`, `group_by` and `filter`:
+
+```
+cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__name__",group_by_values="http_requests_total",by__name__="http_requests_total"} 125000
+```
+
+Estimates are kept in memory only, so a vmestimator restart resets them in the middle of the interval:
+the counter then reads low until the next reset. In cluster mode, restarting a single storage node reduces the merged estimate the same way.
+Functions such as `increase()` treat the reset as a counter reset.
+
+With `-deduplication.interval` set, series already seen within the deduplication window before a reset
+are not passed to the stream again until that window expires, so they are counted with up to that delay after the reset.
+
+`calculate_churn` cannot be used with `mode: counter`.
 
 ### Alerting
 
