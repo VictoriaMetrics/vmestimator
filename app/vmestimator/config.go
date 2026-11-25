@@ -79,14 +79,8 @@ func (cfg *Config) prepare() error {
 		default:
 			return fmt.Errorf("stream #%d: invalid mode %q: must be %q or %q", i+1, ec.Mode, modeGauge, modeCounter)
 		}
-		if ec.Mode == modeCounter {
-			if ec.CalculateChurn {
-				return fmt.Errorf("stream #%d: calculate_churn cannot be used with mode %q", i+1, modeCounter)
-			}
-			// Counter streams emit the mode label; gauge streams don't, so they may keep a static label named mode.
-			if _, ok := ec.Labels["mode"]; ok {
-				return fmt.Errorf("stream #%d: static label name %q is reserved for streams with mode %q", i+1, "mode", modeCounter)
-			}
+		if ec.Mode == modeCounter && ec.CalculateChurn {
+			return fmt.Errorf("stream #%d: calculate_churn cannot be used with mode %q", i+1, modeCounter)
 		}
 		for k := range ec.Labels {
 			if reservedLabels[k] {

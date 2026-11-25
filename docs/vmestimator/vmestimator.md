@@ -172,7 +172,7 @@ streams:
     #    when previously seen series disappear.
     #  - counter: all estimates reset to zero at every interval boundary aligned to the
     #    Unix epoch (e.g. at 00:00 UTC every day for 24h) and only grow until the next reset.
-    #    Counter streams add the mode="counter" label to their metrics.
+    #    Counter streams emit cardinality_count_estimate instead of cardinality_estimate.
     #    calculate_churn cannot be used with mode: counter.
     # See https://docs.victoriametrics.com/victoriametrics/vmestimator/#counter-mode
     #
@@ -461,12 +461,16 @@ and only grow until the next reset. For example, a `24h` stream counts unique se
 of the current day, and a `1h` stream counts them since the top of the current hour.
 Intervals that do not divide 24h evenly are still aligned to the Unix epoch, not to the start of a day.
 
-Counter streams add the `mode="counter"` label, so they can be configured next to a gauge stream with the same
-`interval`, `group_by` and `filter`:
+Counter streams emit `cardinality_count_estimate` instead of `cardinality_estimate`, with the same labels,
+so queries over `cardinality_estimate` never mix gauge and counter values. A counter stream can be configured next to
+a gauge stream with the same `interval`, `group_by` and `filter`:
 
 ```
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__name__",group_by_values="http_requests_total",by__name__="http_requests_total"} 125000
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__name__",group_by_values="http_requests_total",by__name__="http_requests_total"} 125000
 ```
+
+vmestimator's own per-stream metrics (e.g. `vmestimator_estimator_group_limit`, `vmestimator_estimator_insert_total`)
+keep their names and add the `mode="counter"` label for counter streams.
 
 Estimates are kept in memory only, so a vmestimator restart resets them in the middle of the interval:
 the counter then reads low until the next reset. In cluster mode, restarting a single storage node reduces the merged estimate the same way.

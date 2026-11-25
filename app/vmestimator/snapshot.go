@@ -394,12 +394,17 @@ func appendGroupByKeysLabel(buf []byte, labelName string, keys []string) []byte 
 	return buf
 }
 
+// Counter streams emit cardinality_count_estimate instead of cardinality_estimate, so queries over cardinality_estimate
+// can't mix in counter estimates by accident.
 func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string, interval time.Duration, filter, mode string) []byte {
-	buf = append(buf, `cardinality_estimate{interval=`...)
+	if mode == modeCounter {
+		buf = append(buf, `cardinality_count_estimate{interval=`...)
+	} else {
+		buf = append(buf, `cardinality_estimate{interval=`...)
+	}
 	buf = strconv.AppendQuote(buf, interval.String())
 	buf = append(buf, ",filter="...)
 	buf = strconv.AppendQuote(buf, filter)
-	buf = appendModeLabel(buf, mode)
 
 	if len(labels) > 0 {
 		keys := make([]string, 0, len(labels))
@@ -418,8 +423,9 @@ func appendCardinalityEstimateMetricPrefix(buf []byte, labels map[string]string,
 	return buf
 }
 
-// appendModeLabel produces ',mode="counter"' for counter streams and nothing for gauge ones,
-// so series of gauge streams stay unchanged.
+// appendModeLabel produces ',mode="counter"' for counter streams and nothing for gauge ones.
+// It is used for vmestimator's own per-stream metrics, so gauge and counter streams with the same
+// group_by and interval don't produce the same series.
 func appendModeLabel(buf []byte, mode string) []byte {
 	if mode == "" {
 		return buf

@@ -74,15 +74,11 @@ streams:
   calculate_churn: true
 `, true)
 
-	// mode is a reserved label for counter streams only
+	// estimates of counter streams have their own metric name, so a static mode label doesn't clash
 	f(`
 streams:
 - labels: {mode: "a"}
   mode: counter
-`, true)
-	f(`
-streams:
-- labels: {mode: "a"}
 `, false)
 }
 
@@ -146,17 +142,17 @@ func TestCounterModeEstimate(t *testing.T) {
 	defer e.stop()
 
 	insert(e, 0, 100, "foo")
-	assertMetricsSame(t, "", `cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__global__"} 100`, write(e))
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__global__"} 100`, write(e))
 
 	// the estimate only grows between resets: already seen series are not counted again
 	insert(e, 50, 150, "foo")
-	assertMetricsSame(t, "", `cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__global__"} 150`, write(e))
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__global__"} 150`, write(e))
 
 	// at the boundary all buckets reset at once, with no previous generation kept
 	resetBuckets(e)
-	assertMetricsSame(t, "", `cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__global__"} 0`, write(e))
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__global__"} 0`, write(e))
 	insert(e, 100, 110, "foo")
-	assertMetricsSame(t, "", `cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__global__"} 10`, write(e))
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__global__"} 10`, write(e))
 
 	// group stream
 	ge, err := newEstimator(EstimatorConfig{Interval: 24 * time.Hour, Buckets: 4, GroupBy: []string{"__name__"}, GroupLimit: 100, MinCardinality: -1, Mode: modeCounter})
@@ -168,9 +164,9 @@ func TestCounterModeEstimate(t *testing.T) {
 	insert(ge, 0, 20, "foo")
 	insert(ge, 0, 30, "bar")
 	assertMetricsSame(t, "", `
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__name__",group_by_values="foo",by__name__="foo"} 20
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__name__",group_by_values="bar",by__name__="bar"} 30
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__group__",group_by_values="__name__"} 2
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__name__",group_by_values="foo",by__name__="foo"} 20
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__name__",group_by_values="bar",by__name__="bar"} 30
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__"} 2
 vmestimator_estimator_group_limit{interval="24h0m0s",filter="",mode="counter",group_by_keys="__group__",group_by_values="__name__"} 100
 `, write(ge))
 
@@ -178,8 +174,8 @@ vmestimator_estimator_group_limit{interval="24h0m0s",filter="",mode="counter",gr
 	resetBuckets(ge)
 	insert(ge, 0, 5, "foo")
 	assertMetricsSame(t, "", `
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__name__",group_by_values="foo",by__name__="foo"} 5
-cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__group__",group_by_values="__name__"} 1
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__name__",group_by_values="foo",by__name__="foo"} 5
+cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__group__",group_by_values="__name__"} 1
 vmestimator_estimator_group_limit{interval="24h0m0s",filter="",mode="counter",group_by_keys="__group__",group_by_values="__name__"} 100
 `, write(ge))
 	if size := ge.groupSize.totalSize(); size != 1 {
@@ -228,7 +224,7 @@ func TestCounterModeSnapshotTransfer(t *testing.T) {
 	if err := ss.writeMetrics(buf); err != nil {
 		t.Fatalf("cannot write metrics: %s", err)
 	}
-	assertMetricsSame(t, "", `cardinality_estimate{interval="24h0m0s",filter="",mode="counter",group_by_keys="__global__"} 42`, buf.String())
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="24h0m0s",filter="",group_by_keys="__global__"} 42`, buf.String())
 
 	// snapshots from older vmestimator versions have no Mode field and are decoded as gauges
 	type oldSnapshot struct {
@@ -250,7 +246,7 @@ func TestCounterModeSnapshotTransfer(t *testing.T) {
 	if err := ss.writeMetrics(buf); err != nil {
 		t.Fatalf("cannot write metrics: %s", err)
 	}
-	if got := buf.String(); strings.Contains(got, "mode") {
+	if got := buf.String(); !strings.HasPrefix(got, "cardinality_estimate{") {
 		t.Fatalf("old snapshots must be gauges; got %q", got)
 	}
 }
@@ -275,5 +271,5 @@ func TestCounterModeRotation(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
 	e.writeMetrics(buf)
-	assertMetricsSame(t, "", `cardinality_estimate{interval="1s",filter="",mode="counter",group_by_keys="__global__"} 0`, buf.String())
+	assertMetricsSame(t, "", `cardinality_count_estimate{interval="1s",filter="",group_by_keys="__global__"} 0`, buf.String())
 }
