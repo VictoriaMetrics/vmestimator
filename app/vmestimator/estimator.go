@@ -22,7 +22,7 @@ import (
 const labelKeyword = "__label__"
 
 type estimator struct {
-	// id uniquely identifies the estimator by its labels, groupBy, interval and filter.
+	// id uniquely identifies the estimator by its labels, groupBy, interval, filter and mode.
 	// It is passed to snapshots so they can be merged across vmestimator instances.
 	id string
 
@@ -73,7 +73,7 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	e := &estimator{
-		id:              estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter),
+		id:              estimatorID(cfg.Labels, cfg.GroupBy, cfg.Interval, cfg.Filter, cfg.Mode),
 		cfg:             cfg,
 		groupBy:         cfg.GroupBy,
 		hasLabelKeyword: len(cfg.GroupBy) > 0 && cfg.GroupBy[len(cfg.GroupBy)-1] == labelKeyword,
@@ -90,10 +90,11 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 	}
 
 	groupByKeysLabel := appendGroupByKeysLabel(make([]byte, 0, 128), `group_by_values`, cfg.GroupBy)
+	modeLabel := string(appendModeLabel(nil, cfg.Mode))
 	e.insertTotal = e.metricsSet.NewCounter(
-		fmt.Sprintf(`vmestimator_estimator_insert_total{%s,interval=%q}`, groupByKeysLabel, cfg.Interval),
+		fmt.Sprintf(`vmestimator_estimator_insert_total{%s,interval=%q%s}`, groupByKeysLabel, cfg.Interval, modeLabel),
 	)
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_rejected_size{group_by_keys=%q,interval=%q%s}`, groupByKeysLabel, cfg.Interval, modeLabel), func() float64 {
 		return float64(e.groupSize.totalRejected())
 	})
 
@@ -122,21 +123,26 @@ func newEstimator(cfg EstimatorConfig) (*estimator, error) {
 		e.buckets[i] = eb
 	}
 
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_limit{%s,interval=%q%s}`, groupByKeysLabel, cfg.Interval, modeLabel), func() float64 {
 		return float64(e.groupSize.limit)
 	})
-	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q}`, groupByKeysLabel, cfg.Interval), func() float64 {
+	e.metricsSet.NewGauge(fmt.Sprintf(`vmestimator_estimator_group_size{%s,interval=%q%s}`, groupByKeysLabel, cfg.Interval, modeLabel), func() float64 {
 		return float64(e.groupSize.totalSize())
 	})
 
-	go e.runRotation(cfg.Interval)
+	if cfg.Mode == modeCounter {
+		go e.runCounterResets(cfg.Interval)
+	} else {
+		go e.runRotation(cfg.Interval)
+	}
 
 	metrics.RegisterSet(e.metricsSet)
 
 	return e, nil
 }
 
-func estimatorID(labels map[string]string, groupBy []string, interval time.Duration, filter string) string {
+// mode is empty for gauge streams, so their ids stay compatible with vmestimator versions without the mode setting.
+func estimatorID(labels map[string]string, groupBy []string, interval time.Duration, filter, mode string) string {
 	groupByKey := `__global__`
 	if len(groupBy) > 0 {
 		groupByKey = strings.Join(groupBy, ",")
@@ -159,7 +165,11 @@ func estimatorID(labels map[string]string, groupBy []string, interval time.Durat
 		labelsKey = b.String()
 	}
 
-	return fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, interval, filter)
+	id := fmt.Sprintf("\u0000labels=%s\u0000group_by=%s\u0000interval=%v\u0000filter=%v", labelsKey, groupByKey, interval, filter)
+	if mode != "" {
+		id += "\u0000mode=" + mode
+	}
+	return id
 }
 
 func (e *estimator) stop() {
@@ -311,6 +321,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 		s.Sketches[0] = SnapshotSketch{Sketch: resSK}
 		s.ID = e.id
 		s.Interval = eb0.interval
+		s.Mode = e.cfg.Mode
 		s.CalculateChurn = eb0.calculateChurn
 		s.Filter = eb0.filter
 		s.Labels = eb0.labels
@@ -326,6 +337,7 @@ func (e *estimator) toSnapshot(cb func(s *snapshot) error) error {
 	s.GroupLimit = eb0.groupSize.limit
 	s.GroupBy = eb0.groupBy
 	s.Interval = eb0.interval
+	s.Mode = e.cfg.Mode
 	s.CalculateChurn = eb0.calculateChurn
 	s.Filter = eb0.filter
 	s.Labels = eb0.labels
@@ -412,6 +424,7 @@ func (e *estimator) writeMetrics(w io.Writer) {
 		s := &snapshot{
 			GroupBy:        eb0.groupBy,
 			Interval:       eb0.interval,
+			Mode:           e.cfg.Mode,
 			Filter:         eb0.filter,
 			Labels:         eb0.labels,
 			GroupLimit:     eb0.groupSize.limit,
@@ -454,6 +467,30 @@ func (e *estimator) runRotation(interval time.Duration) {
 	}
 }
 
+// runCounterResets resets all buckets at once at every interval boundary aligned to the Unix epoch,
+// e.g. at 00:00 UTC every day for a 24h interval.
+func (e *estimator) runCounterResets(interval time.Duration) {
+	for {
+		t := time.NewTimer(counterResetWait(time.Now(), interval))
+		select {
+		case <-t.C:
+			for _, eb := range e.buckets {
+				eb.reset()
+			}
+		case <-e.stopCh:
+			t.Stop()
+			return
+		}
+	}
+}
+
+// counterResetWait returns the duration from now until the next interval boundary aligned to the Unix epoch.
+// It returns the whole interval when now is exactly at a boundary.
+func counterResetWait(now time.Time, interval time.Duration) time.Duration {
+	period := int64(interval)
+	return time.Duration(period - now.UnixNano()%period)
+}
+
 type estimatorBucket struct {
 	mu sync.Mutex
 
@@ -480,8 +517,9 @@ func (eb *estimatorBucket) reset() {
 	defer eb.mu.Unlock()
 
 	if len(eb.groupBy) == 0 {
-		eb.prevSketch.Reset()
-		eb.sketch.Reset()
+		// prevSketch is nil until the first rotation, and always in counter mode.
+		eb.prevSketch = nil
+		eb.sketch = eb.newSketch()
 		return
 	}
 

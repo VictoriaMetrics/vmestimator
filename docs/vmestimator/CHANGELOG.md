@@ -16,6 +16,8 @@ Metrics of the latest version of vmestimator cluster are available for viewing a
 
 ## tip
 
+* FEATURE: [vmestimator](https://docs.victoriametrics.com/victoriametrics/vmestimator/): add `mode` stream config option. With `mode: counter`, the stream's estimates reset to zero at every `interval` boundary aligned to the Unix epoch (e.g. at 00:00 UTC every day for `24h`) and only grow until the next reset, counting unique series since the last reset. Counter streams emit `cardinality_count_estimate` instead of `cardinality_estimate`, so their values can't be mixed with gauge estimates by accident. The default `mode: gauge` keeps the current sliding-window behavior and metrics. See [counter mode](https://docs.victoriametrics.com/victoriametrics/vmestimator/#counter-mode).
+
 ## [v0.1.18](https://github.com/VictoriaMetrics/vmestimator/releases/tag/v0.1.18)
 
 Released at 2026-10-26

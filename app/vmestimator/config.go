@@ -74,6 +74,14 @@ func (cfg *Config) prepare() error {
 	}
 	ids := make(map[string]int, len(cfg.Streams))
 	for i, ec := range cfg.Streams {
+		switch ec.Mode {
+		case "", modeCounter:
+		default:
+			return fmt.Errorf("stream #%d: invalid mode %q: must be %q or %q", i+1, ec.Mode, modeGauge, modeCounter)
+		}
+		if ec.Mode == modeCounter && ec.CalculateChurn {
+			return fmt.Errorf("stream #%d: calculate_churn cannot be used with mode %q", i+1, modeCounter)
+		}
 		for k := range ec.Labels {
 			if reservedLabels[k] {
 				return fmt.Errorf("static label name %q is reserved and cannot be used in labels", k)
@@ -82,16 +90,25 @@ func (cfg *Config) prepare() error {
 				return fmt.Errorf("static label name %q is reserved: labels starting with \"by_\" are reserved and cannot be used in labels", k)
 			}
 		}
-		// Streams with the same labels, group_by, interval and filter produce identical time series.
-		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter)
+		// Streams with the same labels, group_by, interval, filter and mode produce identical time series.
+		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter, ec.Mode)
 		if j, ok := ids[id]; ok {
-			return fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval and filter; such streams produce identical time series", j+1, i+1)
+			return fmt.Errorf("streams #%d and #%d have the same labels, group_by, interval, filter and mode; such streams produce identical time series", j+1, i+1)
 		}
 		ids[id] = i
 	}
 
 	return nil
 }
+
+const (
+	// modeGauge is the default mode: each bucket keeps its last two generations and buckets rotate one by one,
+	// so the estimate covers a sliding window of the last interval/2 to interval and goes down when series disappear.
+	modeGauge = "gauge"
+	// modeCounter resets all buckets at once at every interval boundary aligned to the Unix epoch,
+	// so the estimate counts unique series since the last boundary and only grows until the next one.
+	modeCounter = "counter"
+)
 
 type EstimatorConfig struct {
 	Filter         string            `yaml:"filter"`
@@ -104,6 +121,7 @@ type EstimatorConfig struct {
 	HLLPrecision   uint8             `yaml:"hll_precision"`
 	HLLSparse      *bool             `yaml:"hll_sparse"`
 	MinCardinality int64             `yaml:"min_cardinality"`
+	Mode           string            `yaml:"mode"`
 }
 
 func (ec *EstimatorConfig) applyDefaults() {
@@ -113,6 +131,10 @@ func (ec *EstimatorConfig) applyDefaults() {
 	}
 	if ec.Interval == 0 {
 		ec.Interval = 5 * time.Minute
+	}
+	if ec.Mode == modeGauge {
+		// Normalize the default mode to an empty value, so it equals to a missing mode on config comparison.
+		ec.Mode = ""
 	}
 	if ec.GroupLimit <= 0 {
 		ec.GroupLimit = 10000
@@ -169,7 +191,7 @@ func loadConfig(cfg *Config, dedup *deduplicator) (bool, error) {
 	es := make([]*estimator, 0, len(cfg.Streams))
 	var created []*estimator
 	for _, ec := range cfg.Streams {
-		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter)
+		id := estimatorID(ec.Labels, ec.GroupBy, ec.Interval, ec.Filter, ec.Mode)
 		// An estimator with changed settings is re-created, since its state depends on them.
 		if e := removed[id]; e != nil && reflect.DeepEqual(e.cfg, ec) {
 			es = append(es, e)
