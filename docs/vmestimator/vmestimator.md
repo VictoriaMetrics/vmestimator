@@ -515,94 +515,81 @@ Use the cardinality explorer when you need to drill into a specific metric or la
 
 ## Cluster
 
-Run `vmestimator` in cluster mode when one instance isn't enough. Cluster mode can keep estimates available when a node fails, handle more series than a single instance's CPU and memory allow, or do both.
+Run `vmestimator` in cluster mode to achieve [High Availability](https://docs.victoriametrics.com/victoriametrics/vmestimator/#high-availability) 
+and/or [Horizontal Scalability](https://docs.victoriametrics.com/victoriametrics/vmestimator/#horizontal-scaling).
 
-Cluster mode splits `vmestimator` into two roles:
+Cluster mode splits `vmestimator` in two roles:
 
-* **Storage nodes** accept Prometheus remote write and build HyperLogLog sketches from the series they receive.
-  All storage nodes must use the same `streams.yaml`:
-
+* **Storage nodes**. Stateful component that accept writes in Prometheus Remote Write protocol and builds the estimates.
+  You can run multiple storage nodes, where each of them must use identical `streams.yaml` config:
+  ```sh
+  vmestimator -config=streams.yaml
   ```
-  vmestimator -config=streams.yaml -cardinalityMetrics.exposeAt=/cardinality/metrics
-  ```
 
-  Each storage node's estimates cover only the series it received, not the whole cluster, so use them only for debugging that node.
-  To keep them out of the operational metrics on `/metrics`, expose them at a separate path as shown above,
-  or turn them off with `-cardinalityMetrics.exposeAt=` (see [Cardinality Metrics](#cardinality-metrics)).
+  Storage nodes aren't aware of each other or selector nodes. They build estimates independently, only for series they receive.
+  Limit params like [`group_limit`](#configuration) are applied to each node independently.
 
-  > Note: for `group_by` streams, each storage node enforces [`group_limit`](#configuration) on its own.
-  > Groups rejected on a node are missing from the merged estimates.
-
-* **Selector nodes** collect sketches from all storage nodes, merge them, and expose the cluster-wide estimates. Scrape cardinality metrics from selector nodes:
-
-  ```
+* **Selector nodes**. Stateless component that collects estimates from **storage nodes** configured via `-storageNode` command-line flag:
+  ```sh
   vmestimator -storageNode=http://vmestimator-storage-1:8490 \
               -storageNode=http://vmestimator-storage-2:8490 \
               -storageNode=http://vmestimator-storage-3:8490
   ```
+  Selector mode is enabled automatically if `-config` flag is not set.
+  Selector node merges the results received from each storage node using HyperLogLog union: a series counts once, whether one storage node or all of them received it.
+  Selector node exposes the cluster-wide estimates on the path configured via `-cardinalityMetrics.exposeAt` command-line flag.
 
-  Selector nodes don't store sketches. They fetch sketches from storage nodes when scraped.
-  For HA, run two or more selector nodes and remove duplicates at query time with `max(cardinality_estimate) without (instance)`.
+### High Availability
 
-  > Note: for streams with `calculate_churn: true`, each selector node keeps its own churn baseline in memory, updated on every scrape of that node.
-  > After a restart, a selector node reports `cardinality_churn_ratio` as `0` for about one stream `interval`, until it builds a new baseline.
-  > Scrape all selector nodes continuously, and query churn with `max(cardinality_churn_ratio) without (instance)`,
-  > so a selector node with a warm baseline covers one that just restarted.
+High availability is achieved by running multiple storage nodes that receive the same writes:
+```mermaid
+flowchart LR
+    A1[vmagent 1] --> LB[Load Balancer]
+    A2[vmagent 2] --> LB
 
-![cluster](/victoriametrics/vmestimator/cluster.webp)
+    LB --> S1[(vmestimator-storage-1)]
+    LB --> S2[(vmestimator-storage-2)]
 
-Sketches are merged with a HyperLogLog union. A series counts once, whether one storage node or all of them received it.
-Because of this, storage nodes don't need to coordinate, and the client sending remote write chooses how series are routed:
-
-| Goal | How to route writes | When a storage node fails | Per-node CPU | Per-node memory |
-|---|---|---|---|---|
-| [Load balancing](#load-balancing) | Send each request to **any** storage node through a load balancer | Writes keep flowing, but part of the estimates may be lost | ~1/N | Same as a single instance |
-| [Horizontal scaling](#horizontal-scaling) | **Shard** series across storage nodes | The failed node's series are missing until it recovers | ~1/N | ~1/N |
-| [High availability](#high-availability) | **Replicate** each series to R storage nodes | Estimates stay complete while fewer than R nodes are down | ~R/N | ~R/N |
-
-### Load balancing
-
-Point remote write clients at a load balancer with health checks in front of the storage nodes:
-
-```
-vmagent -remoteWrite.url=http://vmestimator-lb:8490/api/v1/write
+    S1 -.-> Q[vmestimator-selector<br/>-storageNode=...]
+    S2 -.-> Q
+    Q -.-> M[Monitoring]
 ```
 
-If a storage node goes down, the load balancer routes writes to the remaining nodes,
-but series that only the failed node received are missing from estimates. For complete estimates, see [High availability](#high-availability).
+In this setup, each `vmestimator-storage-N` observes the same workload over time, as requests are evenly routed by the load balancer.
+This effectively makes them replicas of each other. If one replica gets restarted, the other replica still has the actual state.
+The state from both replicas is merged together by the `vmestimator-selector` node.
+
+Optionally, run multiple replicas of `vmestimator-selector` to ensure high availability for selector nodes. Make sure to configure the same `-storageNode` flag for each of them.
+And if you double-scrape estimation results, make sure to [deduplicate them](https://docs.victoriametrics.com/victoriametrics/#deduplication)
+or account for duplicates in your queries. For example, `max(cardinality_estimate) without (instance)` expression will always
+prefer the biggest estimation among duplicates.
 
 ### Horizontal scaling
 
-Split series across storage nodes so that each series always goes to the same node.
-Each node then handles only part of the series, which makes the cluster horizontally scalable: adding nodes lowers CPU and memory usage per node.
+Horizontal scaling is achieved by running multiple storage nodes and sharding workload across them:
+```mermaid
+flowchart LR
+    A1[vmagent] -. sharding .-> S1[(vmestimator-storage-1)]
+    A1 -. sharding .-> S2[(vmestimator-storage-2)]
 
-vmagent supports [sharding among remote storages](https://docs.victoriametrics.com/victoriametrics/vmagent/#sharding-among-remote-storages):
-set `-remoteWrite.shardByURL`, and each series is routed to one `-remoteWrite.url` based on a hash of its labels.
-
+    S1 -.-> Q[vmestimator-selector<br/>-storageNode=...]
+    S2 -.-> Q
+    Q -.-> M[Monitoring]
 ```
+
+In this setup, vmagent [shards the workload](https://docs.victoriametrics.com/victoriametrics/vmagent/#sharding-among-remote-storages) across multiple storage nodes. 
+Example of vmagent configuration is below:
+```sh
 vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
         -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write \
-        -remoteWrite.url=http://vmestimator-storage-3:8490/api/v1/write \
         -remoteWrite.shardByURL
 ```
 
-If a storage node goes down, its series are missing from the merged estimates, so the estimates may be lower than the real values until the node recovers.
+Each storage node observes only its own part of the workload and holds estimates for it. The state from all storage shards is merged together by the `vmestimator-selector` node.
 
-### High availability
-
-Replicate each series to more than one storage node, so estimates stay complete when a node fails.
-
-To replicate every series to every storage node, list one `-remoteWrite.url` per node without `-remoteWrite.shardByURL`.
-Each node then needs the same CPU and memory as a single instance:
-
-```
-vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
-        -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write
-```
-
-To combine HA with [horizontal scaling](#horizontal-scaling), shard series and replicate each shard with `-remoteWrite.shardByURLReplicas`:
-
-```
+This setup can be combined with [high availability](https://docs.victoriametrics.com/victoriametrics/vmestimator/#high-availability) to run multiple replicas for each storage shard.
+In this case, writes to storage nodes need to be and shared and replicated. This behaviour is easily achieved in vmagent via `-remoteWrite.shardByURL` and `-remoteWrite.shardByURLReplicas` flags: 
+```sh
 vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
         -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write \
         -remoteWrite.url=http://vmestimator-storage-3:8490/api/v1/write \
@@ -610,9 +597,9 @@ vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
         -remoteWrite.shardByURLReplicas=2
 ```
 
-In this example, each series goes to 2 of the 3 storage nodes, and the selector node still counts it once thanks to the HLL union.
-Estimates stay complete while any one storage node is down, and each node handles about 2/3 of all series.
-In general, with `N` storage nodes and `-remoteWrite.shardByURLReplicas=R`, the cluster tolerates `R-1` failed nodes, and each node handles about `R/N` of all series.
+In this example, each series goes to 2 of the 3 storage nodes, and the selector node still counts it once thanks to the HyperLogLog union. 
+Estimates stay complete while any one storage node is down, and each node handles about 2/3 of all series. In general, with N storage nodes 
+and `-remoteWrite.shardByURLReplicas=R`, the cluster tolerates `R-1` failed nodes, and each node handles about `R/N` of all series.
 
 ## Operational metrics
 
