@@ -520,14 +520,17 @@ and/or [Horizontal Scalability](https://docs.victoriametrics.com/victoriametrics
 
 Cluster mode splits `vmestimator` in two roles:
 
-* **Storage nodes**. Stateful component that accept writes in Prometheus Remote Write protocol and builds the estimates.
+* **Storage nodes**. Stateful component that accepts writes in Prometheus Remote Write protocol and builds the estimates.
   You can run multiple storage nodes, where each of them must use identical `streams.yaml` config:
   ```sh
-  vmestimator -config=streams.yaml
+  vmestimator -config=streams.yaml -cardinalityMetrics.exposeAt=/cardinality/metrics
   ```
 
   Storage nodes aren't aware of each other or selector nodes. They build estimates independently, only for series they receive.
   Limit params like [`group_limit`](#configuration) are applied to each node independently.
+  By default, storage node [operational metrics](https://docs.victoriametrics.com/victoriametrics/vmestimator/#operational-metrics)
+  and [estimate metrics](https://docs.victoriametrics.com/victoriametrics/vmestimator/#cardinality-metrics) are exposed on the same path `/metrics`.
+  Set `-cardinalityMetrics.exposeAt` to a different path, so partial estimate results won't be scraped together with operational metrics. 
 
 * **Selector nodes**. Stateless component that collects estimates from **storage nodes** configured via `-storageNode` command-line flag:
   ```sh
@@ -544,20 +547,26 @@ Cluster mode splits `vmestimator` in two roles:
 High availability is achieved by running multiple storage nodes that receive the same writes:
 ```mermaid
 flowchart LR
-    A1[vmagent 1] --> LB[Load Balancer]
-    A2[vmagent 2] --> LB
+    A1[vmagent]
 
-    LB --> S1[(vmestimator-storage-1)]
-    LB --> S2[(vmestimator-storage-2)]
+    A1 -- replicating --> S1[(vmestimator-storage-1)]
+    A1 -- replicating --> S2[(vmestimator-storage-2)]
 
-    S1 -.-> Q[vmestimator-selector<br/>-storageNode=...]
-    S2 -.-> Q
-    Q -.-> M[Monitoring]
+    S1 --> Q[vmestimator-selector<br/>-storageNode=...]
+    S2 --> Q
+    Q --> M[Monitoring]
 ```
 
-In this setup, each `vmestimator-storage-N` observes the same workload over time, as requests are evenly routed by the load balancer.
-This effectively makes them replicas of each other. If one replica gets restarted, the other replica still has the actual state.
-The state from both replicas is merged together by the `vmestimator-selector` node.
+In this setup, vmagent [replicates the workload](https://docs.victoriametrics.com/victoriametrics/vmagent/#replication-and-high-availability) across multiple storage nodes.
+Example of vmagent configuration is below:
+```
+vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
+        -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write
+```
+
+Each storage node observes the same workload over time. This effectively makes them replicas of each other. 
+If one replica gets restarted, the other replica still has the actual state. The state from both replicas is merged 
+together by the `vmestimator-selector` node.
 
 Optionally, run multiple replicas of `vmestimator-selector` to ensure high availability for selector nodes. Make sure to configure the same `-storageNode` flag for each of them.
 And if you double-scrape estimation results, make sure to [deduplicate them](https://docs.victoriametrics.com/victoriametrics/#deduplication)
@@ -572,9 +581,9 @@ flowchart LR
     A1[vmagent] -. sharding .-> S1[(vmestimator-storage-1)]
     A1 -. sharding .-> S2[(vmestimator-storage-2)]
 
-    S1 -.-> Q[vmestimator-selector<br/>-storageNode=...]
-    S2 -.-> Q
-    Q -.-> M[Monitoring]
+    S1 --> Q[vmestimator-selector<br/>-storageNode=...]
+    S2 --> Q
+    Q --> M[Monitoring]
 ```
 
 In this setup, vmagent [shards the workload](https://docs.victoriametrics.com/victoriametrics/vmagent/#sharding-among-remote-storages) across multiple storage nodes. 
