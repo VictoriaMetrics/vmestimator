@@ -520,7 +520,7 @@ and/or [Horizontal Scalability](https://docs.victoriametrics.com/victoriametrics
 
 Cluster mode splits `vmestimator` in two roles:
 
-* **Storage nodes**. Stateful component that accepts writes in Prometheus Remote Write protocol and builds the estimates.
+* **Storage nodes**. Stateful components that accept writes in Prometheus Remote Write protocol and build the estimates.
   You can run multiple storage nodes, where each of them must use identical `streams.yaml` config:
   ```sh
   vmestimator -config=streams.yaml -cardinalityMetrics.exposeAt=/cardinality/metrics
@@ -597,7 +597,7 @@ vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
 Each storage node observes only its own part of the workload and holds estimates for it. The state from all storage shards is merged together by the `vmestimator-selector` node.
 
 This setup can be combined with [high availability](https://docs.victoriametrics.com/victoriametrics/vmestimator/#high-availability) to run multiple replicas for each storage shard.
-In this case, writes to storage nodes need to be and shared and replicated. This behaviour is easily achieved in vmagent via `-remoteWrite.shardByURL` and `-remoteWrite.shardByURLReplicas` flags: 
+In this case, writes to storage nodes need to be sharded and replicated. This behaviour is easily achieved in vmagent via `-remoteWrite.shardByURL` and `-remoteWrite.shardByURLReplicas` flags:
 ```sh
 vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
         -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write \
