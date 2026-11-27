@@ -588,7 +588,7 @@ vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
 Each storage node observes only its own part of the workload and holds estimates for it. The state from all storage shards is merged together by the `vmestimator-selector` node.
 
 This setup can be combined with [high availability](https://docs.victoriametrics.com/victoriametrics/vmestimator/#high-availability) to run multiple replicas for each storage shard.
-In this case, writes to storage nodes need to be and shared and replicated. This behaviour is easily achieved in vmagent via `-remoteWrite.shardByURL` and `-remoteWrite.shardByURLReplicas` flags: 
+In this case, writes to storage nodes need to be sharded and replicated. This behaviour is easily achieved in vmagent via `-remoteWrite.shardByURL` and `-remoteWrite.shardByURLReplicas` flags:
 ```sh
 vmagent -remoteWrite.url=http://vmestimator-storage-1:8490/api/v1/write \
         -remoteWrite.url=http://vmestimator-storage-2:8490/api/v1/write \
