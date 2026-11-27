@@ -520,7 +520,7 @@ and/or [Horizontal Scalability](https://docs.victoriametrics.com/victoriametrics
 
 Cluster mode splits `vmestimator` in two roles:
 
-* **Storage nodes**. Stateful component that accept writes in Prometheus Remote Write protocol and builds the estimates.
+* **Storage nodes**. Stateful components that accept writes in Prometheus Remote Write protocol and build the estimates.
   You can run multiple storage nodes, where each of them must use identical `streams.yaml` config:
   ```sh
   vmestimator -config=streams.yaml
